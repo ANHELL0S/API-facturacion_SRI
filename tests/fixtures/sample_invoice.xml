@@ -1,0 +1,68 @@
+<autorizacion>
+    <estado>AUTORIZADO</estado>
+    <numeroAutorizacion>1234567890</numeroAutorizacion>
+    <fechaAutorizacion>2025-01-01T12:00:00-05:00</fechaAutorizacion>
+    <comprobante><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<factura id="comprobante" version="2.1.0">
+    <infoTributaria>
+        <ambiente>1</ambiente>
+        <tipoEmision>1</tipoEmision>
+        <razonSocial>TEST BUSINESS</razonSocial>
+        <nombreComercial>Test Inc.</nombreComercial>
+        <ruc>1234567890001</ruc>
+        <claveAcceso>1234567890123456789012345678901234567890123456789</claveAcceso>
+        <codDoc>01</codDoc>
+        <estab>001</estab>
+        <ptoEmi>001</ptoEmi>
+        <secuencial>000000001</secuencial>
+        <dirMatriz>123 Main St</dirMatriz>
+    </infoTributaria>
+    <infoFactura>
+        <fechaEmision>01/01/2025</fechaEmision>
+        <dirEstablecimiento>123 Main St</dirEstablecimiento>
+        <obligadoContabilidad>NO</obligadoContabilidad>
+        <tipoIdentificacionComprador>05</tipoIdentificacionComprador>
+        <razonSocialComprador>John Doe</razonSocialComprador>
+        <identificacionComprador>1234567890</identificacionComprador>
+        <direccionComprador>456 Side St</direccionComprador>
+        <totalSinImpuestos>100.00</totalSinImpuestos>
+        <totalDescuento>0.00</totalDescuento>
+        <totalConImpuestos>
+            <totalImpuesto>
+                <codigo>2</codigo>
+                <codigoPorcentaje>2</codigoPorcentaje>
+                <baseImponible>100.00</baseImponible>
+                <tarifa>12</tarifa>
+                <valor>12.00</valor>
+            </totalImpuesto>
+        </totalConImpuestos>
+        <propina>0.00</propina>
+        <importeTotal>112.00</importeTotal>
+        <moneda>DOLAR</moneda>
+    </infoFactura>
+    <detalles>
+        <detalle>
+            <codigoPrincipal>P001</codigoPrincipal>
+            <descripcion>Product 1</descripcion>
+            <cantidad>1</cantidad>
+            <precioUnitario>100.00</precioUnitario>
+            <descuento>0.00</descuento>
+            <precioTotalSinImpuesto>100.00</precioTotalSinImpuesto>
+            <impuestos>
+                <impuesto>
+                    <codigo>2</codigo>
+                    <codigoPorcentaje>2</codigoPorcentaje>
+                    <tarifa>12</tarifa>
+                    <baseImponible>100.00</baseImponible>
+                    <valor>12.00</valor>
+                </impuesto>
+            </impuestos>
+        </detalle>
+    </detalles>
+    <infoAdicional>
+        <campoAdicional nombre="email">test@example.com</campoAdicional>
+    </infoAdicional>
+</factura>
+]]>
+    </comprobante>
+</autorizacion>

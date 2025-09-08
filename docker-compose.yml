@@ -1,0 +1,48 @@
+version: "3.9"
+
+services:
+  laravel-php:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: laravel-php
+    volumes:
+      - .:/var/www
+    ports:
+      - "9000:9000" # expone php-fpm para Nginx en el host
+    networks:
+      - laravel-net
+
+  laravel-db:
+    image: mysql:8
+    container_name: laravel-db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: factuZen_pass_root
+      MYSQL_DATABASE: factuZen_db
+      MYSQL_USER: factuZen_user
+      MYSQL_PASSWORD: factusZen_pass
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - laravel-net
+
+  laravel-queue:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: laravel-queue
+    command: php artisan queue:work
+    volumes:
+      - .:/var/www
+    depends_on:
+      - laravel-db
+    networks:
+      - laravel-net
+
+volumes:
+  db_data:
+
+networks:
+  laravel-net:
+    driver: bridge
