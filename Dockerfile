@@ -47,8 +47,8 @@ RUN composer install --no-dev --no-scripts --no-autoloader --optimize-autoloader
 # Copiar package.json y package-lock.json para dependencias de Node
 COPY package*.json ./
 
-# Instalar dependencias de Node
-RUN npm ci --only=production
+# Instalar dependencias de Node (incluyendo devDependencies para el build)
+RUN npm ci
 
 # Copiar el resto del código
 COPY . .
