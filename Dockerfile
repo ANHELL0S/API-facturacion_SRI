@@ -19,31 +19,18 @@ RUN apt-get update && apt-get install -y \
     libonig-dev \
     libcurl4-openssl-dev \
     pkg-config \
-    libssl-dev \
     default-mysql-client \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-
 # Configurar y instalar extensiones PHP necesarias para Laravel
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install \
-    pdo \
-    pdo_mysql \
-    pdo_pgsql \
-    zip \
-    bcmath \
-    intl \
-    gd \
-    xsl \
-    soap \
-    mbstring \
-    xml \
-    curl \
-    fileinfo \
-    tokenizer \
-    json \
-    ctype
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg
+
+# Instalar extensiones PHP una por una para mejor debugging
+RUN docker-php-ext-install pdo pdo_mysql pdo_pgsql
+RUN docker-php-ext-install zip bcmath intl
+RUN docker-php-ext-install gd xsl soap
+RUN docker-php-ext-install mbstring xml curl fileinfo
 
 # Instalar Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
