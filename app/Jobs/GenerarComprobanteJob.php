@@ -81,6 +81,7 @@ class GenerarComprobanteJob implements ShouldQueue
     private function generarXML(ComprobanteGenerator $comprobanteGenerator, array $preparedData, PuntoEmision $puntoEmision): array
     {
         try {
+            \Log::info('Prepared data for generarXML:', $preparedData);
             return $comprobanteGenerator->factura($preparedData, $this->user, $puntoEmision, $this->claveAcceso);
         } catch (\Exception $e) {
             throw new \Exception('Error en el generador de comprobante: ' . $e->getMessage());

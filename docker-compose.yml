@@ -1,48 +1,70 @@
-version: "3.9"
+version: "3.8"
 
 services:
-  laravel-php:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: laravel-php
-    volumes:
-      - .:/var/www
-    ports:
-      - "9000:9000" # expone php-fpm para Nginx en el host
-    networks:
-      - laravel-net
+    laravel-php:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        container_name: laravel-php
+        volumes:
+            - .:/var/www
+        ports:
+            - "9000:9000"
+        networks:
+            - laravel-net
+        depends_on:
+            - laravel-db
+        restart: unless-stopped
 
-  laravel-db:
-    image: mysql:8
-    container_name: laravel-db
-    restart: always
-    environment:
-      MYSQL_ROOT_PASSWORD: factuZen_pass_root
-      MYSQL_DATABASE: factuZen_db
-      MYSQL_USER: factuZen_user
-      MYSQL_PASSWORD: factusZen_pass
-    volumes:
-      - db_data:/var/lib/mysql
-    networks:
-      - laravel-net
+    laravel-db:
+        image: mysql:8.0.34
+        container_name: laravel-db
+        restart: always
+        environment:
+            MYSQL_ROOT_PASSWORD: factuZen_pass_root
+            MYSQL_DATABASE: factuZen_db
+            MYSQL_USER: factuZen_user
+            MYSQL_PASSWORD: factuZen_pass
+        volumes:
+            - db_data:/var/lib/mysql
+        networks:
+            - laravel-net
+        ports:
+            - "3307:3306"
+        command: --default-authentication-plugin=mysql_native_password
 
-  laravel-queue:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: laravel-queue
-    command: php artisan queue:work
-    volumes:
-      - .:/var/www
-    depends_on:
-      - laravel-db
-    networks:
-      - laravel-net
+    laravel-queue:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        container_name: laravel-queue
+        volumes:
+            - .:/var/www
+        depends_on:
+            - laravel-db
+            - laravel-php
+        networks:
+            - laravel-net
+        restart: unless-stopped
+        command: sh -c "sleep 30 && php artisan queue:work --sleep=3 --tries=3"
+
+    vite:
+        image: node:20-alpine
+        container_name: laravel-vite
+        working_dir: /var/www
+        volumes:
+            - .:/var/www
+            - /var/www/node_modules
+        ports:
+            - "5173:5173"
+        networks:
+            - laravel-net
+        restart: unless-stopped
+        command: sh -c "npm install && npm install react react-dom @vitejs/plugin-react && npm run build && sleep infinity"
 
 volumes:
-  db_data:
+    db_data:
 
 networks:
-  laravel-net:
-    driver: bridge
+    laravel-net:
+        driver: bridge
