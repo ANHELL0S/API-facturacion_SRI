@@ -26,7 +26,7 @@ RUN apt-get update && apt-get install -y \
 # Configurar y instalar extensiones PHP necesarias para Laravel
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg
 
-# Instalar extensiones PHP una por una para mejor debugging
+# Instalar extensiones PHP
 RUN docker-php-ext-install pdo pdo_mysql pdo_pgsql
 RUN docker-php-ext-install zip bcmath intl
 RUN docker-php-ext-install gd xsl soap
@@ -38,40 +38,20 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 # Establecer directorio de trabajo
 WORKDIR /var/www
 
-# Copiar composer.json y composer.lock primero (para mejor cache de Docker)
-COPY composer.json composer.lock ./
+# Configurar PHP-FPM para conexiones desde cualquier IP
+RUN sed -i 's/listen = 127.0.0.1:9000/listen = 0.0.0.0:9000/' /usr/local/etc/php-fpm.d/www.conf && \
+    echo "pm.max_children = 50" >> /usr/local/etc/php-fpm.d/www.conf && \
+    echo "pm.start_servers = 5" >> /usr/local/etc/php-fpm.d/www.conf && \
+    echo "pm.min_spare_servers = 5" >> /usr/local/etc/php-fpm.d/www.conf && \
+    echo "pm.max_spare_servers = 35" >> /usr/local/etc/php-fpm.d/www.conf && \
+    echo "request_terminate_timeout = 300" >> /usr/local/etc/php-fpm.d/www.conf
 
-# Instalar dependencias de Composer
-RUN composer install --no-dev --no-scripts --no-autoloader --optimize-autoloader
-
-# Copiar package.json y package-lock.json para dependencias de Node
-COPY package*.json ./
-
-# Instalar dependencias de Node (incluyendo devDependencies para el build)
-RUN npm ci
-
-# Copiar el resto del código
-COPY . .
-
-# Finalizar la instalación de Composer
-RUN composer dump-autoload --optimize
-
-# Compilar assets con Vite
-RUN npm run build
-
-# Crear directorios necesarios con permisos correctos
-RUN mkdir -p storage/framework/cache \
-    && mkdir -p storage/framework/sessions \
-    && mkdir -p storage/framework/views \
-    && mkdir -p storage/logs \
-    && mkdir -p storage/app/public \
-    && mkdir -p bootstrap/cache
-
-# Configurar permisos
-RUN chown -R www-data:www-data /var/www \
-    && chmod -R 755 /var/www \
-    && chmod -R 775 storage \
-    && chmod -R 775 bootstrap/cache
+# Crear archivo de configuración PHP personalizado
+RUN echo "upload_max_filesize = 100M" >> /usr/local/etc/php/conf.d/laravel.ini && \
+    echo "post_max_size = 100M" >> /usr/local/etc/php/conf.d/laravel.ini && \
+    echo "memory_limit = 256M" >> /usr/local/etc/php/conf.d/laravel.ini && \
+    echo "max_execution_time = 300" >> /usr/local/etc/php/conf.d/laravel.ini && \
+    echo "max_input_time = 300" >> /usr/local/etc/php/conf.d/laravel.ini
 
 # Exponer puerto
 EXPOSE 9000
