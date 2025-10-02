@@ -10,6 +10,17 @@ const paymentMethodMap = {
   'endoso de titulos': '21',
 };
 
+export const paymentMethodOptions = [
+    { value: '01', text: 'Sin Utilización del Sistema Financiero' },
+    { value: '15', text: 'Compensación de Deudas' },
+    { value: '16', text: 'Tarjeta de Débito' },
+    { value: '17', text: 'Dinero Electrónico' },
+    { value: '18', text: 'Tarjeta Prepago' },
+    { value: '19', text: 'Tarjeta de Crédito' },
+    { value: '20', text: 'Otros con Utilización del Sistema Financiero' },
+    { value: '21', text: 'Endoso de Títulos' },
+];
+
 export const parsePaymentMethods = (paymentString, totalAmount) => {
   if (!paymentString || String(paymentString).trim() === '') {
     return [{ formaPago: '01', total: totalAmount }];

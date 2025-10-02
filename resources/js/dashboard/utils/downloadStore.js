@@ -59,7 +59,11 @@ const store = reactive({
                     this.activeBulkDownloads = this.activeBulkDownloads.filter(j => j.id !== jobId);
                     this.emitter.emit('show-alert', { type: 'error', message: `La descarga masiva de ${job.format.toUpperCase()} ha fallado.` });
                 } else {
-                    this.activeBulkDownloads.splice(jobIndex, 1, job);
+                    // Mutate the existing object to ensure reactivity
+                    const existingJob = this.activeBulkDownloads[jobIndex];
+                    existingJob.status = job.status;
+                    existingJob.processed_files = job.processed_files;
+                    existingJob.total_files = job.total_files;
                 }
             }
         } catch (error) {
@@ -71,31 +75,25 @@ const store = reactive({
         }
     },
 
-    async downloadAll(invoices, format) {
-        if (invoices.length === 0) {
-            this.emitter.emit('show-alert', { type: 'info', message: 'No hay facturas para descargar.' });
-            return;
-        }
-
-        this.emitter.emit('show-alert', { type: 'info', message: `Preparando la descarga de ${invoices.length} facturas. Te notificaremos cuando esté lista.` });
-
+    async downloadWithFilters(filters) {
+        this.emitter.emit('show-alert', { type: 'info', message: 'Iniciando descarga masiva. Esto puede tardar unos momentos...' });
         try {
-            const claves_acceso = invoices.map(invoice => invoice.clave_acceso);
-            const response = await axios.post('/api/comprobantes/descargar-masivo', {
-                claves_acceso,
-                format,
-            }, {
-                headers: { 'Authorization': `Bearer ${this.token}` },
+            const response = await axios.post('/api/comprobantes/descargar-masivo', filters, {
+                headers: { 'Authorization': `Bearer ${this.token}` }
             });
 
-            if (response.status === 202) {
-                const jobId = response.data.data.job_id;
-                this.activeBulkDownloads.push({ id: jobId, status: 'pending', format, total_files: invoices.length, processed_files: 0 });
-                this.bulkDownloadPollers[jobId] = setInterval(() => this.pollJobStatus(jobId), 3000);
-            }
+            const fullJob = response.data.data;
+            this.activeBulkDownloads.push(fullJob);
+            this.bulkDownloadPollers[fullJob.id] = setInterval(() => this.pollJobStatus(fullJob.id), 3000);
+
         } catch (error) {
-            console.error('Error starting bulk download:', error);
-            this.emitter.emit('show-alert', { type: 'error', message: 'Ocurrió un error al iniciar la descarga masiva.' });
+            console.error('Error en la descarga masiva:', error);
+            if (error.response?.status === 404) {
+                this.emitter.emit('show-alert', { type: 'warning', message: 'No se encontraron comprobantes con los filtros seleccionados.' });
+            } else {
+                const errorMessage = error.response?.data?.message || 'Ocurrió un error inesperado.';
+                this.emitter.emit('show-alert', { type: 'error', message: `Error en la descarga: ${errorMessage}` });
+            }
         }
     },
 

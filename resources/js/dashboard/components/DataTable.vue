@@ -53,6 +53,14 @@
                   {{ row.error_message }}
                 </span>
               </span>
+              <span v-else-if="header.value === 'cliente'">
+                <span v-if="!row.isExpanded" @click="$emit('toggle-expansion', row.id)" class="cursor-pointer" :title="row.cliente">
+                  {{ truncateText(row.cliente, 11) }}
+                </span>
+                <span v-else @click="$emit('toggle-expansion', row.id)" class="cursor-pointer">
+                  {{ row.cliente }}
+                </span>
+              </span>
               <span v-else-if="header.value === 'acciones'" class="space-x-2 text-center">
                   <!-- Download Buttons -->
                   <button v-if="(row.estado === 'autorizado' && row.fecha_autorizacion) || row.error_message === 'ERROR SECUENCIAL REGISTRADO'" @click="$emit('download-xml', row.clave_acceso)" title="Descargar XML" class="p-1 text-blue-600 hover:text-blue-800 transition-colors">

@@ -136,36 +136,6 @@ class ComprobantesResponses
         //
     }
 
-     #[OA\Response(
-        response: 'ObtenerPdfComprobanteResponse',
-        description: 'PDF obtenido exitosamente',
-        content: new OA\JsonContent(
-            allOf: [
-                new OA\Schema(ref: '#/components/schemas/Success'),
-                new OA\Schema(
-                    properties: [
-                        new OA\Property(
-                            property: 'message',
-                            type: 'string',
-                            example: 'PDF obtenido exitosamente'
-                        ),
-                        new OA\Property(
-                            property: 'data',
-                            type: 'object',
-                            properties: [
-                                new OA\Property(property: 'pdf', type: 'string')
-                            ]
-                        )
-                    ]
-                )
-            ]
-        )
-    )]
-    public function consultarPdfComprobante()
-    {
-        //
-    }
-
 
     #[OA\Response(
         response: 'ComprobanteNoAutorizadoResponse',

@@ -30,7 +30,7 @@ class DocumentData
             $validatedData['obligadoContabilidad'] = $user->obligadoContabilidad ? 'SI' : 'NO';
 
             return $validatedData;
-        } catch (\Exception $e) {
+        } catch(\Exception $e) {
             throw new \Exception('Error al obtener los datos del punto de emisión: ' . $e->getMessage());
         }
     }

@@ -7,16 +7,39 @@
         <h2 v-else class="text-2xl font-semibold whitespace-nowrap transition-all duration-300" :class="isSidebarOpen ? 'max-w-xs' : 'opacity-0 max-w-0'">{{ sidebarTitle }}</h2>
       </div>
       <nav class="flex-grow px-4 py-2 space-y-2">
-        <a v-for="item in navigation" :key="item.name" href="#" @click.prevent="$emit('navigate', item.view)"
-           :class="['flex items-center px-4 py-2 rounded-md transition-colors', currentView === item.view ? 'bg-gray-700' : 'hover:bg-gray-700']">
-          <component :is="item.icon" :class="['w-6 h-6 transition-all duration-300 flex-shrink-0', isSidebarOpen ? 'mr-3' : 'mx-auto']" />
-          <span class="relative whitespace-nowrap transition-all duration-300" :class="isSidebarOpen ? '' : 'opacity-0'">
-            {{ item.name }}
-                  <span v-if="item.count > 0" class="absolute -top-2 -right-3 bg-red-500 text-white rounded-full w-3 h-3 flex items-center justify-center" style="font-size: 0.6rem;">
-          {{ item.count }}
-        </span>
-          </span>
-        </a>
+        <div v-for="item in navigation" :key="item.name">
+          <!-- Parent Menu Item -->
+          <a v-if="!item.children" href="#" @click.prevent="$emit('navigate', item.view)"
+             :class="['flex items-center px-4 py-2 rounded-md transition-colors', currentView === item.view ? 'bg-gray-700' : 'hover:bg-gray-700']">
+            <component :is="item.icon" :class="['w-6 h-6 transition-all duration-300 flex-shrink-0', isSidebarOpen ? 'mr-3' : 'mx-auto']" />
+            <span class="relative whitespace-nowrap transition-all duration-300" :class="isSidebarOpen ? '' : 'opacity-0'">
+              {{ item.name }}
+            </span>
+          </a>
+          <!-- Submenu -->
+          <div v-else>
+            <button @click="toggleSubmenu(item.name)"
+                    :class="['w-full flex items-center text-left px-4 py-2 rounded-md transition-colors', isSubmenuActive(item) ? 'bg-gray-700' : 'hover:bg-gray-700']">
+              <component :is="item.icon" :class="['w-6 h-6 transition-all duration-300 flex-shrink-0', isSidebarOpen ? 'mr-3' : 'mx-auto']" />
+              <span class="flex-1 relative whitespace-nowrap transition-all duration-300" :class="isSidebarOpen ? '' : 'opacity-0'">
+                {{ item.name }}
+              </span>
+              <svg v-if="isSidebarOpen" class="w-4 h-4 ml-2 transition-transform" :class="{'rotate-90': openSubmenus[item.name]}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+            </button>
+            <div v-if="openSubmenus[item.name] && isSidebarOpen" class="mt-1 ml-4 pl-4 border-l-2 border-gray-600">
+              <a v-for="child in item.children" :key="child.name" href="#" @click.prevent="$emit('navigate', child.view)"
+                 :class="['flex items-center px-4 py-2 rounded-md transition-colors text-sm', currentView === child.view ? 'bg-gray-700' : 'hover:bg-gray-700']">
+                <component :is="child.icon" class="w-5 h-5 mr-3 flex-shrink-0" />
+                <span class="relative whitespace-nowrap">
+                  {{ child.name }}
+                  <span v-if="child.count > 0" class="absolute -top-1 -right-2 bg-red-500 text-white rounded-full w-3 h-3 flex items-center justify-center" style="font-size: 0.5rem;">
+                    {{ child.count }}
+                  </span>
+                </span>
+              </a>
+            </div>
+          </div>
+        </div>
       </nav>
       <div class="px-4 py-4 mt-auto">
         <button @click="$emit('logout')" class="w-full flex items-center justify-center px-4 py-2 font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors duration-200">
@@ -102,8 +125,33 @@ export default {
     emits: ['navigate', 'logout', 'toggle-sidebar'],
     data() {
         return {
-            downloadStore: downloadStore
+            downloadStore: downloadStore,
+            openSubmenus: {},
         };
+    },
+    methods: {
+        toggleSubmenu(name) {
+            this.openSubmenus[name] = !this.openSubmenus[name];
+        },
+        isSubmenuActive(item) {
+            return item.children && item.children.some(child => child.view === this.currentView);
+        },
+        initializeOpenSubmenus() {
+            this.navigation.forEach(item => {
+                if (item.children) {
+                    // Automatically open the submenu if one of its children is the current view
+                    this.openSubmenus[item.name] = this.isSubmenuActive(item);
+                }
+            });
+        }
+    },
+    watch: {
+        currentView() {
+            this.initializeOpenSubmenus();
+        }
+    },
+    created() {
+        this.initializeOpenSubmenus();
     },
     beforeUnmount() {
         this.downloadStore.clearPollers();

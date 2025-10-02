@@ -10,19 +10,21 @@
         </div>
 
         <div class="mt-2 text-sm text-gray-700">
-          <form @submit.prevent="save" class="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
-            <!-- Loop through all fields in the editable row data -->
-            <div v-for="(value, key) in editableRow" :key="key">
-                <!-- We only want to edit specific, user-facing fields -->
-                <template v-if="isEditableField(key)">
-                    <label :for="`edit-${key}`" class="block text-sm font-medium text-gray-700">{{ formatLabel(key) }}</label>
-                    <input
-                        :type="getFieldType(key)"
-                        :id="`edit-${key}`"
-                        v-model="editableRow[key]"
-                        class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                    >
-                </template>
+          <form @submit.prevent="save" class="max-h-[60vh] overflow-y-auto pr-2">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+              <!-- Loop through all fields in the editable row data -->
+              <div v-for="(value, key) in editableRow" :key="key">
+                  <!-- We only want to edit specific, user-facing fields -->
+                  <template v-if="isEditableField(key)">
+                      <label :for="`edit-${key}`" class="block text-sm font-medium text-gray-700">{{ formatLabel(key) }}</label>
+                      <input
+                          :type="getFieldType(key)"
+                          :id="`edit-${key}`"
+                          v-model="editableRow[key]"
+                          class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                      >
+                  </template>
+              </div>
             </div>
           </form>
         </div>

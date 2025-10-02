@@ -131,4 +131,43 @@ class BulkDownloadTest extends TestCase
             Storage::disk('public')->assertExists("pdfs/{$comprobante->clave_acceso}.pdf");
         }
     }
+
+    public function test_can_initiate_bulk_download_with_date_filters()
+    {
+        // 1. Setup
+        $user = User::factory()->create();
+
+        // Create invoices with specific data to filter by
+        Comprobante::factory()->for($user)->create([
+            'estado' => EstadosComprobanteEnum::AUTORIZADO->value,
+            'fecha_emision' => '2023-10-25',
+        ]);
+        Comprobante::factory()->for($user)->create([
+            'estado' => EstadosComprobanteEnum::AUTORIZADO->value,
+            'fecha_emision' => '2023-10-26',
+        ]);
+        Comprobante::factory()->for($user)->create([
+            'estado' => EstadosComprobanteEnum::AUTORIZADO->value,
+            'fecha_emision' => '2023-10-27',
+        ]);
+
+        // 2. Action
+        $response = $this->actingAs($user)->postJson('/api/comprobantes/descargar-masivo', [
+            'format' => 'xml',
+            'fecha_desde' => '2023-10-25',
+            'fecha_hasta' => '2023-10-26',
+        ]);
+
+        // 3. Assertions
+        $response->assertStatus(202);
+
+        $this->assertDatabaseHas('bulk_download_jobs', [
+            'user_id' => $user->id,
+            'format' => 'xml',
+            'total_files' => 2, // Only 2 should match the date filter
+            'status' => BulkDownloadStatusEnum::PENDING->value,
+        ]);
+
+        Bus::assertDispatched(CreateBulkDownloadZipJob::class);
+    }
 }

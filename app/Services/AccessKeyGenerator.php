@@ -54,13 +54,13 @@ class AccessKeyGenerator
             $accessKey = $cadenaVerificacion . $digitoVerificador;
 
             return $accessKey;
-        } catch (\Exception $e) {
+        } catch(\Exception $e) {
             throw new \Exception($e->getMessage());
         }
     }
 
     protected static function generateNumericCode(): int
     {
-        return rand(10000000, 99999999);
+        return rand(10000000,99999999);
     }
 }

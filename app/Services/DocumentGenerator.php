@@ -17,17 +17,13 @@ class DocumentGenerator
         $this->xmlBlockGenerator = $xmlBlockGenerator;
     }
 
-    public function newFactura(array $preparedData, string $claveAcceso = null): array
+    public function newFactura(array $preparedData): array
     {
         try {
             $preparedData['codDoc'] = TipoComprobanteEnum::FACTURA->value;
 
-            // 🔥 USAR LA CLAVE EXISTENTE O GENERAR UNA NUEVA (PARA BACKWARD COMPATIBILITY)
-            if ($claveAcceso) {
-                $accessKey = $claveAcceso;
-            } else {
-                $accessKey = AccessKeyGenerator::generate($preparedData);
-            }
+            // Generación de la clave de acceso
+            $accessKey = AccessKeyGenerator::generate($preparedData);
 
             // Obtención de las partes necesarias
             $infoTributaria = $this->xmlBlockGenerator->addInfoTributaria($preparedData, $accessKey);

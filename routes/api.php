@@ -8,6 +8,8 @@ use App\Http\Controllers\Client\ComprobantesController;
 use App\Http\Controllers\Client\EstablecimientoController;
 use App\Http\Controllers\Client\PuntoEmisionController;
 use App\Http\Controllers\Client\PerfilClientController;
+use App\Http\Controllers\Client\ProductController;
+
 
 Route::group(['middleware' => ['json.response']], function () {
     /* ---------------------------------- Auth routes ---------------------------------- */
@@ -70,17 +72,19 @@ Route::group(['middleware' => ['json.response']], function () {
         Route::post('/puntos-emision/reset/{punto_emision}', [PuntoEmisionController::class, 'reset']);
     });
 
+    /* ---------------------------------- Rutas Productos ---------------------------------- */
+    Route::middleware(['jwt', 'role:client'])->group(function () {
+        Route::resource('products', ProductController::class)->except(['create', 'edit']);
+        Route::get('/persona/{id}', [ComprobantesController::class, 'getPersona']);
+    });
+
     /* ---------------------------------- Rutas de comprobantes ---------------------------------- */
     Route::prefix('comprobantes')->middleware(['jwt', 'role:client'])->group(function () {
         Route::get('/', [ComprobantesController::class, 'index']);
         Route::get('/export/authorized', [ComprobantesController::class, 'exportAuthorized']);
+        Route::get('/export', [ComprobantesController::class, 'export']);
 
-        Route::get('/byId/{id}', [ComprobantesController::class, 'showById']);
-        Route::get('/byId/{id}/xml', [ComprobantesController::class, 'getXmlById']);
-        Route::get('/byId/{id}/pdf', [ComprobantesController::class, 'getPdfById']);
-        Route::get('/byId/{id}/estado', [ComprobantesController::class, 'getEstadoById']);
-        Route::post('/byId/{id}/resend-webhook', [ComprobantesController::class, 'resendWebhookById']);
-
+        Route::get('/product-codes', [ComprobantesController::class, 'getProductCodes']);
         Route::get('/{clave_acceso}', [ComprobantesController::class, 'show']);
         Route::get('/{clave_acceso}/estado', [ComprobantesController::class, 'getEstado']);
         Route::get('/{clave_acceso}/xml', [ComprobantesController::class, 'getXml']);

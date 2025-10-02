@@ -104,7 +104,7 @@ class CertificadoFirma
                 if (strpos($sslError, 'unsupported') !== false) {
                     throw new Exception('El certificado usa algoritmos criptográficos legacy no soportados por esta versión de OpenSSL. Intente convertir el certificado a un formato más moderno o contacte al administrador del sistema.');
                 } else {
-                    throw new Exception('Verifique que el archivo sea un certificado PKCS#12 válido y que la clave sea correcta.');
+                    throw new Exception('El archivo del certificado o la clave son inválidos. Verifique que el archivo sea un certificado PKCS#12 válido y que la clave sea correcta.');
                 }
             }
 
@@ -157,22 +157,38 @@ class CertificadoFirma
             }
             Log::info("serialNumber encontrado en el certificado: " . $certRuc);
 
-            $certRuc = preg_replace('/[^0-9]/', '', $certRuc);
-            Log::info("RUC limpiado del certificado: " . $certRuc . ". RUC esperado del usuario: " . $expectedRuc);
+            // Extraer solo la parte inicial del serialNumber, que corresponde a la Cédula/RUC.
+            // Formato común: 1234567890-xxxxxxxxxx
+            if (preg_match('/^(\d+)/', $certRuc, $matches)) {
+                $certRuc = $matches[1];
+            } else {
+                // Fallback por si el formato no es el esperado
+                $certRuc = preg_replace('/[^0-9]/', '', $certRuc);
+            }
+            Log::info("RUC/Cédula limpiado del certificado: " . $certRuc . ". RUC esperado del usuario: " . $expectedRuc);
 
             $rucMatch = false;
-            // Caso 1: El RUC del usuario (13 dígitos) comienza con el RUC/Cédula del certificado (10 dígitos).
-            // Esto cubre el caso de personas naturales donde el RUC es Cédula + '001'.
-            if (strlen($expectedRuc) == 13 && strlen($certRuc) == 10 && str_starts_with($expectedRuc, $certRuc)) {
-                $rucMatch = true;
-                Log::info("Coincidencia encontrada: Caso persona natural (RUC 13 dígitos vs Cédula 10 dígitos)");
-            }
+            $tipoContribuyente = $this->getTipoContribuyente($expectedRuc);
+            Log::info("Tipo de contribuyente detectado para RUC $expectedRuc: " . $tipoContribuyente);
 
-            // Caso 2: El RUC del usuario (13 dígitos) es idéntico al RUC del certificado (13 dígitos).
-            // Esto cubre el caso de empresas donde el certificado contiene el RUC completo.
-            if (strlen($expectedRuc) == 13 && strlen($certRuc) == 13 && $expectedRuc === $certRuc) {
+            if ($tipoContribuyente === 'persona_natural') {
+                // Para personas naturales, el RUC del usuario (13 dígitos) debe comenzar con la Cédula del certificado (10 dígitos).
+                if (strlen($certRuc) == 10 && str_starts_with($expectedRuc, $certRuc)) {
+                    $rucMatch = true;
+                    Log::info("Validación exitosa para Persona Natural (Cédula en certificado vs RUC de usuario).");
+                }
+            } elseif ($tipoContribuyente === 'persona_juridica_privada' || $tipoContribuyente === 'persona_juridica_publica') {
+                // Para personas jurídicas, se omite la validación estricta del RUC del certificado,
+                // ya que el certificado pertenece al Representante Legal (Cédula) y no a la empresa (RUC).
+                // Se asume que si el cliente sube la firma, es la correcta.
                 $rucMatch = true;
-                Log::info("Coincidencia encontrada: Caso empresa (RUC 13 dígitos idéntico)");
+                Log::info("Se omite la validación de RUC para Persona Jurídica. Se confía en el certificado proporcionado por el usuario.");
+            }
+            
+            // Como fallback y para otros casos (ej. RUC de empresa en certificado), se realiza una comprobación de coincidencia exacta.
+            if (!$rucMatch && $expectedRuc === $certRuc) {
+                $rucMatch = true;
+                Log::info("Validación exitosa por coincidencia exacta de RUC.");
             }
 
             if (!$rucMatch) {
@@ -209,6 +225,30 @@ class CertificadoFirma
             // Re-lanzamos la excepción para que el controlador la maneje
             throw $e;
         }
+    }
+
+    /**
+     * Determina el tipo de contribuyente basado en el RUC.
+     * @param string $ruc
+     * @return string
+     */
+    private function getTipoContribuyente(string $ruc): string
+    {
+        if (strlen($ruc) !== 13) {
+            return 'desconocido';
+        }
+
+        $tercerDigito = substr($ruc, 2, 1);
+
+        if ($tercerDigito >= '0' && $tercerDigito < '6') {
+            return 'persona_natural';
+        } elseif ($tercerDigito == '6') {
+            return 'persona_juridica_publica';
+        } elseif ($tercerDigito == '9') {
+            return 'persona_juridica_privada';
+        }
+
+        return 'desconocido';
     }
 
     /**

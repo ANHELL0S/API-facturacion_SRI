@@ -14,6 +14,7 @@
             </template>
             Exportar a Excel
         </BaseButton>
+       
       </div>
     </div>
     <p class="text-gray-600 mb-6">Aquí puede ver las facturas que fallaron durante el proceso masivo y necesitan corrección. Edite los datos necesarios y vuelva a procesarlas.</p>
@@ -21,7 +22,7 @@
     <div class="bg-white rounded-xl shadow-lg">
         <div class="px-6 pt-6">
             <!-- Billing controls will go here -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           <div>
               <BaseSelect
                 id="corr-establecimiento-select"
@@ -41,15 +42,29 @@
                 placeholder="Seleccione un punto de emisión"
               />
           </div>
+          <div>
+            <BaseSelect
+                id="corr-payment-method-select"
+                label="Método de Pago (para todo el lote)"
+                v-model="selectedPaymentMethod"
+                :options="paymentMethodOptions"
+                placeholder="Seleccione un método de pago"
+            />
+          </div>
       </div>
       <div class="mb-4 flex justify-end">
+        <BaseButton @click="clearTable" class="mr-2" variant="danger" :disabled="failedRows.length === 0">
+            Limpiar Tabla
+        </BaseButton>
         <!-- Start Button -->
         <BaseButton v-if="!isBilling" @click="startBilling" :disabled="failedRows.length === 0 || !selectedPuntoEmisionId" variant="success">
             <template #icon>
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
             </template>
             Facturar Corregidas
+            
         </BaseButton>
+         
         <!-- Billing In Progress Controls -->
         <div v-if="isBilling" class="flex items-center space-x-4">
             <div class="flex items-center text-lg font-medium text-gray-700">
@@ -125,7 +140,7 @@ import RefreshButton from './RefreshButton.vue';
 import BaseSelect from './BaseSelect.vue';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
-import { parsePaymentMethods } from '../utils/paymentMethods.js';
+import { paymentMethodOptions } from '../utils/paymentMethods.js';
 
 export default {
   name: 'CorrectiveBilling',
@@ -173,6 +188,8 @@ export default {
       puntosEmision: [],
       selectedEstablecimientoId: null,
       selectedPuntoEmisionId: null,
+      selectedPaymentMethod: '01',
+      paymentMethodOptions: paymentMethodOptions,
       isLoading: false,
       searchQuery: '',
       sortKey: 'Nombres',
@@ -437,11 +454,10 @@ export default {
       const taxRate = 1 + (tarifa / 100);
       const totalSinImpuestos = precio / taxRate;
       const iva = precio - totalSinImpuestos;
-      const metodoPago = findValue('metodo de pago');
-      const pagos = parsePaymentMethods(metodoPago, precio).map(p => ({
-        ...p,
-        total: formatToString(p.total)
-      }));
+      const pagos = [{
+          formaPago: this.selectedPaymentMethod,
+          total: formatToString(precio)
+      }];
       return {
         tipoIdentificacionComprador: String(cedula).length === 13 ? '04' : '05',
         razonSocialComprador: nombres,
@@ -487,17 +503,36 @@ export default {
         this.saveState();
         window.dispatchEvent(new Event('corrective-billing-update'));
       } catch (error) {
-        const errorMessage = error.response?.data?.message || error.message;
-        let friendlyMessage = errorMessage;
-        if (error.message === 'Cédula no válida') {
-          friendlyMessage = 'Cédula debe tener 10 o 13 dígitos.';
-        } else if (error.message === 'Precio no válido') {
-          friendlyMessage = 'El Precio debe ser un número mayor a 0.';
-        } else if (error.message.includes('columnas requeridas')) {
-          friendlyMessage = 'Datos incompletos en la fila.';
+        console.log("Caught Error Object:", JSON.stringify(error, null, 2));
+        if (error.response) {
+            console.log("Full Server Response:", JSON.stringify(error.response.data, null, 2));
         }
+
+        let finalErrorMessage = "Ocurrió un error inesperado."; // Default message
+
+        const sriError = error.response?.data?.errors?.sri_error;
+        const apiMessage = error.response?.data?.message;
+        const genericError = error.message;
+
+        if (sriError) {
+            finalErrorMessage = sriError;
+        } else if (apiMessage) {
+            finalErrorMessage = apiMessage;
+        } else if (genericError) {
+            finalErrorMessage = genericError;
+        }
+        
+        // The component has some specific client-side validation messages that should take precedence
+        if (error.message === 'Cédula no válida') {
+          finalErrorMessage = 'Cédula debe tener 10 o 13 dígitos.';
+        } else if (error.message === 'Precio no válido') {
+          finalErrorMessage = 'El Precio debe ser un número mayor a 0.';
+        } else if (error.message.includes('columnas requeridas')) {
+          finalErrorMessage = 'Datos incompletos en la fila.';
+        }
+
         // Update the row with the new error but keep it in the table
-        this.updateRowStatus(row.id, 'No Facturado', friendlyMessage);
+        this.updateRowStatus(row.id, 'No Facturado', finalErrorMessage);
       }
     },
     pauseBilling() {
@@ -564,6 +599,13 @@ export default {
         XLSX.utils.book_append_sheet(workbook, worksheet, "Facturas Fallidas");
         XLSX.writeFile(workbook, "facturas_correctivas.xlsx");
     },
+    clearTable() {
+        if (window.confirm('¿Está seguro de que desea limpiar toda la tabla? Esta acción no se puede deshacer.')) {
+            this.failedRows = [];
+            this.saveState(); // This will also clear localStorage
+            this.$emitter.emit('show-alert', { type: 'success', message: 'La tabla ha sido limpiada.' });
+        }
+    },
   },
 };
-</script>
+</script> 

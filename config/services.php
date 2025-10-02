@@ -40,4 +40,9 @@ return [
         'base_url' => env('EMITTO_BASE_URL', 'https://api-emitto.softecsa.com'),
     ],
 
+    'personas' => [
+        'token' => env('API_PERSONAS'),
+        'base_url' => env('URL_PERSONAS', 'https://apipersonas.softecsa.com/'),
+    ],
+
 ];

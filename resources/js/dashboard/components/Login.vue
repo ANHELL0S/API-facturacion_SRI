@@ -1,10 +1,13 @@
 <template>
   <div
-    class="flex items-center justify-center min-h-screen bg-cover bg-center grayscale"
-    style="background-image: url('https://i0.wp.com/picjumbo.com/wp-content/uploads/business-meeting-in-the-office-free-photo.jpg');"
+    class="flex items-center justify-center min-h-screen bg-cover bg-center "
+    style="background-image: url('https://logosoftla.com/wp-content/uploads/2021/05/FACTURA-ELECTRONICA-COSTA-RICA.jpg'); filter: contrast(1.2); filter: saturate(1.1);"
   >
+  
     <div class="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-2xl bg-opacity-80 border border-gray-200">
-      <h1 class="text-2xl font-bold text-center text-gray-900">Iniciar Sesión</h1>
+      <div class="flex justify-center mb-4">
+        <img src="/FACTURADORAPP-LOGO.png" alt="Logo" class="h-14">
+      </div>
       <form @submit.prevent="handleLogin" class="space-y-6">
         <div>
           <label for="email" class="block text-sm font-medium text-gray-700">Email</label>

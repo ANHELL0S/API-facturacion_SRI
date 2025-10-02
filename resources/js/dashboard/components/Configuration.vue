@@ -1,12 +1,18 @@
 <template>
   <div>
     <h2 class="text-2xl font-bold text-gray-800 mb-4">Configuración</h2>
-    <p class="text-gray-600 mb-6">Administre la configuración general, establecimientos y puntos de emisión.</p>
+    <p class="text-gray-600 mb-6">Administre la configuración general, firma electrónica, estado de la factura, establecimientos y puntos de emisión.</p>
 
     <div class="mb-4 border-b border-gray-200">
         <nav class="-mb-px flex space-x-8" aria-label="Tabs">
             <a href="#" @click.prevent="activeTab = 'general'" :class="['whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm', activeTab === 'general' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300']">
                 General
+            </a>
+            <a href="#" @click.prevent="activeTab = 'signature'" :class="['whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm', activeTab === 'signature' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300']">
+                Firma Electrónica
+            </a>
+            <a href="#" @click.prevent="activeTab = 'status'" :class="['whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm', activeTab === 'status' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300']">
+                Estado de Factura
             </a>
             <a href="#" @click.prevent="activeTab = 'establecimientos'" :class="['whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm', activeTab === 'establecimientos' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300']">
                 Establecimientos
@@ -114,6 +120,20 @@
       <div v-if="activeTab === 'puntos_emision'">
         <PuntosEmisionManager :is-sidebar-open="isSidebarOpen" />
       </div>
+      <div v-if="activeTab === 'signature'">
+        <div class="bg-white rounded-xl shadow-lg p-6">
+          <h3 class="text-xl font-bold mb-4 text-gray-800 border-b pb-3">Firma Electrónica</h3>
+          <p class="text-gray-600 mb-4">Cargue su certificado de firma electrónica para poder emitir comprobantes.</p>
+          <SignatureUpload />
+        </div>
+      </div>
+      <div v-if="activeTab === 'status'">
+        <div class="bg-white rounded-xl shadow-lg p-6">
+          <h3 class="text-xl font-bold mb-4 text-gray-800 border-b pb-3">Estado de Factura</h3>
+          <p class="text-gray-600 mb-4">Verifique el estado de los servicios del SRI.</p>
+          <StatusChecker :token="token" />
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -121,6 +141,8 @@
 <script>
 import EstablecimientosManager from './EstablecimientosManager.vue';
 import PuntosEmisionManager from './PuntosEmisionManager.vue';
+import SignatureUpload from './SignatureUpload.vue';
+import StatusChecker from './StatusChecker.vue';
 import BaseSelect from './BaseSelect.vue';
 import axios from 'axios';
 
@@ -135,6 +157,8 @@ export default {
   components: {
     EstablecimientosManager,
     PuntosEmisionManager,
+    SignatureUpload,
+    StatusChecker,
     BaseSelect,
   },
   data() {

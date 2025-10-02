@@ -6,6 +6,7 @@ enum BulkDownloadStatusEnum: string
 {
     case PENDING = 'pending';
     case PROCESSING = 'processing';
+    case COMPRESSING = 'compressing';
     case COMPLETED = 'completed';
     case FAILED = 'failed';
 

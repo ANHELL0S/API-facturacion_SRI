@@ -7,76 +7,52 @@ use SoapClient;
 use SoapFault;
 use Illuminate\Support\Facades\Log;
 
-
 class SriComprobanteService
 {
-    // URLs para pruebas y producción
     private const RECEPCION_PRUEBAS = 'https://celcer.sri.gob.ec/comprobantes-electronicos-ws/RecepcionComprobantesOffline?wsdl';
     private const RECEPCION_PRODUCCION = 'https://cel.sri.gob.ec/comprobantes-electronicos-ws/RecepcionComprobantesOffline?wsdl';
     private const AUTORIZACION_PRUEBAS = 'https://celcer.sri.gob.ec/comprobantes-electronicos-ws/AutorizacionComprobantesOffline?wsdl';
     private const AUTORIZACION_PRODUCCION = 'https://cel.sri.gob.ec/comprobantes-electronicos-ws/AutorizacionComprobantesOffline?wsdl';
 
+    // Cache de clientes SOAP para reutilizar conexiones
+    private static array $soapClients = [];
+
     /**
-     * Verifica la disponibilidad del servicio SRI.
-     * @param string $wsdl
-     * @return bool
+     * Obtiene o crea un cliente SOAP con configuración optimizada
      */
-    private function checkSriDisponible(string $wsdl)
+    private function getSoapClient(string $wsdl): SoapClient
     {
-        try {
-            // Intentar una conexión simple al WSDL con un timeout corto
-            $client = new SoapClient($wsdl, [
-                'connection_timeout' => 5, // Timeout de 5 segundos
+        if (!isset(self::$soapClients[$wsdl])) {
+            self::$soapClients[$wsdl] = new SoapClient($wsdl, [
+                'connection_timeout' => 3,
+                'cache_wsdl' => WSDL_CACHE_BOTH,
+                'compression' => SOAP_COMPRESSION_ACCEPT | SOAP_COMPRESSION_GZIP,
+                'keep_alive' => true,
                 'exceptions' => true,
             ]);
-
-            // Si la conexión al WSDL es exitosa, asumimos que el servicio está disponible
-            return true;
-        } catch (SoapFault $e) {
-            Log::error("🚫 SRI no disponible (WSDL: {$wsdl}): {$e->getMessage()}");
-            return false;
-        } catch (\Exception $e) {
-            Log::error("🚫 Error al verificar disponibilidad del SRI (WSDL: {$wsdl}): {$e->getMessage()}");
-            return false;
         }
+        return self::$soapClients[$wsdl];
     }
-
 
     /**
      * Envía un comprobante al SRI para su recepción.
-     * @param string $xmlString
-     * @return array
-     * @throws SriException
      */
-    public function enviarComprobanteRecepcion(string $xmlString)
+    public function enviarComprobanteRecepcion(string $xmlString): array
     {
         Log::info('⏳ Enviando comprobante a la recepción');
 
-        // Detectar el ambiente desde el XML
         $ambiente = $this->leerAmbienteDesdeXml($xmlString);
-
-        // Configurar la URL según el ambiente
         $wsdl = ($ambiente == '1') ? self::RECEPCION_PRUEBAS : self::RECEPCION_PRODUCCION;
 
-        // Verificar la disponibilidad del servicio SRI
-        if (!$this->checkSriDisponible($wsdl)) {
-            throw new SriException('0', 'El servicio SRI no está disponible.');
-        }
-
         try {
-            // Cliente SOAP
-            $client = new SoapClient($wsdl);
-
-            // Parámetros para el servicio SOAP
+            $client = $this->getSoapClient($wsdl);
             $params = (object) ['xml' => $xmlString];
             $result = $client->validarComprobante($params);
 
             $estado = $result->RespuestaRecepcionComprobante->estado ?? null;
 
             if ($estado !== 'RECIBIDA') {
-                // Extraer el primer mensaje de error del SRI
                 $mensaje = $result->RespuestaRecepcionComprobante->comprobantes->comprobante->mensajes->mensaje ?? null;
-
                 $codigo = $mensaje->identificador ?? '0';
                 $descripcion = $mensaje->mensaje ?? 'Error en recepción';
                 $informacionAdicional = $mensaje->informacionAdicional ?? null;
@@ -100,45 +76,35 @@ class SriComprobanteService
         }
     }
 
-
     /**
      * Envía un comprobante al SRI para autorización.
-     * @param string $claveAcceso
-     * @param string $ambiente
-     * @return array
-     * @throws SriException
+     * Optimizado: reduce intentos y tiempos de espera
      */
-    public function enviarComprobanteAutorizacion(string $claveAcceso, string $ambiente = '1')
+    public function enviarComprobanteAutorizacion(string $claveAcceso, string $ambiente = '1'): array
     {
         Log::info('⏳ Enviando comprobante para autorización');
         $wsdl = $ambiente === '1' ? self::AUTORIZACION_PRUEBAS : self::AUTORIZACION_PRODUCCION;
 
-        // Verificar disponibilidad del SRI
-        if (!$this->checkSriDisponible($wsdl)) {
-            throw new SriException('0', 'El servicio del SRI no está disponible en este momento.');
-        }
-
         try {
-            $client = new SoapClient($wsdl);
-
+            $client = $this->getSoapClient($wsdl);
             $params = (object) ['claveAccesoComprobante' => $claveAcceso];
 
-            $maxIntentos = 5;
+            // Reducido de 5 a 3 intentos máximos
+            $maxIntentos = 3;
             $intentos = 0;
 
             while ($intentos < $maxIntentos) {
+                $intentos++;
+
                 try {
-                    $intentos++;
                     $result = $client->autorizacionComprobante($params);
-
-                    Log::info("🔁 Intento {$intentos} autorización: " . json_encode($result));
-
                     $autorizaciones = $result->RespuestaAutorizacionComprobante->autorizaciones->autorizacion ?? null;
 
                     if ($autorizaciones) {
                         $autorizacion = is_array($autorizaciones) ? $autorizaciones[0] : $autorizaciones;
 
                         if ($autorizacion->estado === 'AUTORIZADO') {
+                            Log::info("✅ Comprobante autorizado en intento {$intentos}");
                             return [
                                 'success' => true,
                                 'autorizacion' => $autorizacion,
@@ -146,46 +112,42 @@ class SriComprobanteService
                             ];
                         }
 
-                        $mensaje = $autorizacion->mensajes->mensaje ?? null;
-                        $codigo = $mensaje->identificador ?? '0';
-                        $descripcion = $mensaje->mensaje ?? 'Comprobante no autorizado';
-                        $infoAdicional = $mensaje->informacionAdicional ?? null;
+                        // Si el estado es NO AUTORIZADO o RECHAZADO, no reintentar
+                        if (in_array($autorizacion->estado, ['NO AUTORIZADO', 'RECHAZADO'])) {
+                            $mensaje = $autorizacion->mensajes->mensaje ?? null;
+                            $codigo = $mensaje->identificador ?? '0';
+                            $descripcion = $mensaje->mensaje ?? 'Comprobante no autorizado';
+                            $infoAdicional = $mensaje->informacionAdicional ?? null;
 
-                        throw new SriException($codigo, $descripcion, [
-                            'info_adicional' => $infoAdicional,
-                            'estado_sri' => $autorizacion->estado,
-                        ]);
+                            throw new SriException($codigo, $descripcion, [
+                                'info_adicional' => $infoAdicional,
+                                'estado_sri' => $autorizacion->estado,
+                            ]);
+                        }
                     }
 
-                    sleep(1); // Espera antes del siguiente intento
-                } catch (SoapFault $e) {
-                    throw new SriException('0', 'Error de conexión con el SRI: ' . $e->getMessage());
-                } catch (\Exception $e) {
-                    if ($intentos >= $maxIntentos) {
-                        throw new SriException('0', 'Error inesperado en autorización: ' . $e->getMessage());
+                    // Solo esperar si no es el último intento y el estado es EN PROCESO
+                    if ($intentos < $maxIntentos) {
+                        usleep(500000); // 0.5 segundos (reducido de 1 segundo)
                     }
-                    sleep(1);
+                } catch (SriException $e) {
+                    throw $e; // Re-lanzar excepciones de SRI inmediatamente
                 }
             }
 
-            throw new SriException('0', 'No se recibió una respuesta de autorización válida del SRI después de varios intentos.');
+            throw new SriException('0', 'No se recibió una respuesta de autorización válida del SRI después de ' . $maxIntentos . ' intentos.');
         } catch (SoapFault $e) {
             throw new SriException('0', 'Error de conexión con el SRI: ' . $e->getMessage());
         }
     }
 
-
     /**
      * Envía un comprobante al SRI y lo autoriza.
-     * @param string $xmlString
-     * @param string $claveAcceso
-     * @return array
-     * @throws SriException
      */
     public function enviarYAutorizarComprobante(string $xmlString, string $claveAcceso): array
     {
         try {
-            // 👉 Enviar a recepción
+            // Recepción
             $recepcion = $this->enviarComprobanteRecepcion($xmlString);
 
             if (!$recepcion['success']) {
@@ -195,7 +157,6 @@ class SriComprobanteService
                 $codigo = '0';
                 $mensaje = 'El comprobante no fue recibido';
 
-                // Intentar extraer código del primer mensaje de error del SRI
                 if (is_object($mensajes)) {
                     $msg = is_array($mensajes) ? $mensajes[0] : $mensajes->mensaje ?? null;
 
@@ -211,10 +172,7 @@ class SriComprobanteService
                 ]);
             }
 
-            // Pausa para dar tiempo al SRI a procesar
-            sleep(2);
-
-            // 👉 Autorización
+            // Autorización inmediata (sin sleep innecesario)
             $ambiente = $this->leerAmbienteDesdeXml($xmlString);
             return $this->enviarComprobanteAutorizacion($claveAcceso, $ambiente);
         } catch (SriException $e) {
@@ -224,14 +182,8 @@ class SriComprobanteService
         }
     }
 
-
     /**
      * Consulta el XML autorizado desde el SRI.
-     *
-     * @param string $claveAcceso Clave de acceso del comprobante
-     * @param string $ambiente Ambiente (1: pruebas, 2: producción)
-     * @return string XML autorizado
-     * @throws SriException
      */
     public function consultarXmlAutorizado(string $claveAcceso, string $ambiente = '1'): string
     {
@@ -239,24 +191,18 @@ class SriComprobanteService
 
         $wsdl = ($ambiente === '1') ? self::AUTORIZACION_PRUEBAS : self::AUTORIZACION_PRODUCCION;
 
-        // Verificar disponibilidad del SRI
-        if (!$this->checkSriDisponible($wsdl)) {
-            throw new SriException('0', 'El servicio del SRI no está disponible en este momento.');
-        }
-
         try {
-            $client = new SoapClient($wsdl);
+            $client = $this->getSoapClient($wsdl);
             $params = (object) ['claveAccesoComprobante' => $claveAcceso];
 
             $result = $client->autorizacionComprobante($params);
-
             $autorizaciones = $result->RespuestaAutorizacionComprobante->autorizaciones->autorizacion ?? null;
 
             if ($autorizaciones) {
                 $autorizacion = is_array($autorizaciones) ? $autorizaciones[0] : $autorizaciones;
 
                 if ($autorizacion->estado === 'AUTORIZADO') {
-                    return $autorizacion->comprobante; // Devolver el XML autorizado
+                    return $autorizacion->comprobante;
                 }
 
                 $mensaje = $autorizacion->mensajes->mensaje ?? null;
@@ -278,15 +224,17 @@ class SriComprobanteService
         }
     }
 
-
     /**
      * Lee el ambiente desde el XML.
-     * @param string $xmlString
-     * @return string
-     * @throws \Exception
      */
     private function leerAmbienteDesdeXml(string $xmlString): string
     {
+        // Optimización: usar regex en lugar de parsear XML completo
+        if (preg_match('/<ambiente>([12])<\/ambiente>/', $xmlString, $matches)) {
+            return $matches[1];
+        }
+
+        // Fallback al método original si el regex falla
         $xml = simplexml_load_string($xmlString);
         $ambiente = (string) $xml->infoTributaria->ambiente;
 

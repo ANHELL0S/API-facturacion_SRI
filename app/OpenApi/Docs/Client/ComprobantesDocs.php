@@ -167,7 +167,7 @@ class ComprobantesDocs
     private function consultarEstadoComprobante()
     {
     }
-    
+
 
     /* ------------------------------- Consultar XML del comprobante ------------------------------- */
     #[OA\Get(
@@ -210,51 +210,6 @@ class ComprobantesDocs
         ]
     )]
     private function consultarXmlComprobante()
-    {
-    }
-
-    
-    /* ------------------------------- Consultar PDF del comprobante ------------------------------- */
-    #[OA\Get(
-        path: '/comprobantes/{clave_acceso}/pdf',
-        operationId: 'obtenerPdfComprobante',
-        summary: 'Obtener el PDF de un comprobante',
-        description: <<<EOT
-        Consulta el PDF de un comprobante por su clave de acceso.
-
-        Respuestas esperadas:
-        - 200: PDF obtenido exitosamente
-        - 401: No autorizado
-        - 403: Acceso denegado:
-            - No tienes permiso para ver este comprobante
-            - El comprobante tiene un error registrado
-        - 404: Comprobante no encontrado
-        - 409: Comprobante no autorizado
-        - 500: Error inesperado al consultar el PDF
-        - 502: Error de consulta en el SRI
-        EOT,
-        tags: ['Comprobantes'],
-        security: [['bearerAuth' => []]],
-        parameters: [
-            new OA\Parameter(
-                name: 'clave_acceso',
-                in: 'path',
-                required: true,
-                description: 'Clave de acceso del comprobante',
-                schema: new OA\Schema(type: 'string', minLength: 49, maxLength: 49, example: '2204202501025017927200110010010000000073104300715')
-            )
-        ],
-        responses: [
-            new OA\Response(response: 200, ref: '#/components/responses/ObtenerPdfComprobanteResponse'),
-            new OA\Response(response: 401, ref: '#/components/responses/Unauthorized'),
-            new OA\Response(response: 403, ref: '#/components/responses/Forbidden'),
-            new OA\Response(response: 404, ref: '#/components/responses/NotFound'),
-            new OA\Response(response: 409, ref: '#/components/responses/ComprobanteNoAutorizadoResponse'),
-            new OA\Response(response: 500, ref: '#/components/responses/ServerError'),
-            new OA\Response(response: 502, ref: '#/components/responses/ServerError'),
-        ]
-    )]
-    private function consultarPdfComprobante()
     {
     }
 
@@ -309,10 +264,3 @@ class ComprobantesDocs
     {
     }
 }
-
-
-
-
-
-
-

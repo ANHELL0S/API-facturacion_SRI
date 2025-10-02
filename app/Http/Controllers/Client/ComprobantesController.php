@@ -10,14 +10,14 @@ use App\Http\Controllers\Controller;
 use App\Models\Comprobante;
 use App\Models\PuntoEmision;
 use App\Http\Requests\FacturaRequest;
-use App\Jobs\CreateBulkDownloadZipJob;
-use App\Jobs\GenerarComprobanteJob;
+use App\Jobs\ProcessBulkDownloadChunkJob;
+use App\Jobs\CreateFinalZipJob;
 use App\Models\BulkDownloadJob;
-use App\Services\AccessKeyGenerator;
 use App\Services\ClaveAccesoBarcode;
+use Illuminate\Support\Facades\Bus;
 use App\Services\FileGenerationService;
+use App\Services\SincronoComprobanteService;
 use App\Services\SriComprobanteService;
-use App\Services\GeneradorClaveAcceso;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -27,6 +27,10 @@ use Illuminate\Support\Facades\Storage;
 use PDF;
 use ZipArchive;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
+
 
 class ComprobantesController extends Controller
 {
@@ -59,8 +63,6 @@ class ComprobantesController extends Controller
             'ambiente' => ['nullable', 'string', 'in:' . implode(',', AmbientesEnum::values())],
             'fecha_desde' => ['nullable', 'date'],
             'fecha_hasta' => ['nullable', 'date', 'after_or_equal:fecha_desde'],
-            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
-            'page' => ['nullable', 'integer', 'min:1'],
         ]);
 
         if ($validator->fails()) {
@@ -96,9 +98,7 @@ class ComprobantesController extends Controller
                 $query->whereDate('fecha_emision', '<=', $request->fecha_hasta);
             }
 
-            $perPage = $request->input('per_page', 10);
-
-            $comprobantes = $query->orderByDesc('fecha_emision')->paginate($perPage);
+            $comprobantes = $query->orderByDesc('fecha_emision')->get();
 
             return $this->sendResponse(
                 'Comprobantes recuperados exitosamente.',
@@ -149,6 +149,66 @@ class ComprobantesController extends Controller
         }
     }
 
+    public function export(Request $request)
+    {
+        // Validar los filtros
+        $validator = \Validator::make($request->all(), [
+            'tipo' => ['nullable', 'string', 'in:' . implode(',', TipoComprobanteEnum::values())],
+            'estado' => ['nullable', 'string', 'in:' . implode(',', EstadosComprobanteEnum::values())],
+            'ambiente' => ['nullable', 'string', 'in:' . implode(',', AmbientesEnum::values())],
+            'fecha_desde' => ['nullable', 'date'],
+            'fecha_hasta' => ['nullable', 'date', 'after_or_equal:fecha_desde'],
+        ]);
+
+        if ($validator->fails()) {
+            return $this->sendError(
+                'Parámetros no válidos',
+                $validator->errors(),
+                422
+            );
+        }
+
+        try {
+            $user = auth()->user();
+
+            $query = Comprobante::where('user_id', $user->id);
+
+            if ($request->filled('tipo')) {
+                $query->where('tipo_comprobante', $request->tipo);
+            }
+
+            if ($request->filled('ambiente')) {
+                $query->where('ambiente', $request->ambiente);
+            }
+
+
+
+            if ($request->filled('estado')) {
+                $query->where('estado', $request->estado);
+            }
+
+            if ($request->filled('fecha_desde')) {
+                $query->whereDate('fecha_emision', '>=', $request->fecha_desde);
+            }
+
+            if ($request->filled('fecha_hasta')) {
+                $query->whereDate('fecha_emision', '<=', $request->fecha_hasta);
+            }
+
+            $comprobantes = $query->orderByDesc('fecha_emision')->get();
+
+            return $this->sendResponse(
+                'Comprobantes recuperados exitosamente para exportación.',
+                $comprobantes,
+                200
+            );
+        } catch (AuthorizationException $e) {
+            return $this->sendError('Acceso denegado', $e->getMessage(), 403);
+        } catch (\Exception $e) {
+            return $this->sendError('Error al obtener los comprobantes para exportación', $e->getMessage(), 500);
+        }
+    }
+
 
     public function show(string $clave_acceso)
     {
@@ -170,216 +230,6 @@ class ComprobantesController extends Controller
             return $this->sendError('Comprobante no encontrado', 'No se encontró el comprobante con la clave de acceso proporcionada.', 404);
         } catch (\Exception $e) {
             return $this->sendError('Error al recuperar el comprobante', $e->getMessage(), 404);
-        }
-    }
-
-
-    /**
-     * Obtener un comprobante por su UUID
-     */
-    public function showById(string $id)
-    {
-        try {
-            // Validar que el ID sea un UUID válido
-            $validator = \Validator::make(['id' => $id], [
-                'id' => ['required', 'uuid']
-            ]);
-
-            if ($validator->fails()) {
-                return $this->sendError(
-                    'ID no válido',
-                    $validator->errors(),
-                    422
-                );
-            }
-
-            // Buscar el comprobante por UUID
-            $comprobante = Comprobante::findOrFail($id);
-
-            // Autorizar que el usuario pueda ver este comprobante
-            Gate::authorize('view', $comprobante);
-
-            return $this->sendResponse(
-                'Comprobante recuperado correctamente.',
-                $comprobante,
-                200
-            );
-        } catch (AuthorizationException $e) {
-            return $this->sendError('Acceso denegado', $e->getMessage(), 403);
-        } catch (ModelNotFoundException $e) {
-            return $this->sendError('Comprobante no encontrado', 'No se encontró el comprobante con el ID proporcionado.', 404);
-        } catch (\Exception $e) {
-            return $this->sendError('Error al recuperar el comprobante', $e->getMessage(), 500);
-        }
-    }
-
-    /**
-     * Obtener XML de un comprobante por su UUID
-     */
-    public function getXmlById(string $id)
-    {
-        try {
-            $validator = \Validator::make(['id' => $id], [
-                'id' => ['required', 'uuid']
-            ]);
-
-            if ($validator->fails()) {
-                return $this->sendError('ID no válido', $validator->errors(), 422);
-            }
-
-            $comprobante = Comprobante::findOrFail($id);
-            Gate::authorize('view', $comprobante);
-
-            $xml = $this->fileGenerationService->generateXmlContent($comprobante);
-
-            return $this->sendResponse(
-                'XML obtenido exitosamente',
-                ['xml' => $xml]
-            );
-        } catch (AuthorizationException $e) {
-            return $this->sendError('Acceso denegado', $e->getMessage(), 403);
-        } catch (ModelNotFoundException $e) {
-            return $this->sendError('Comprobante no encontrado', 'No se encontró el comprobante con el ID proporcionado.', 404);
-        } catch (\Exception $e) {
-            return $this->sendError('Error al obtener el XML', $e->getMessage(), 500);
-        }
-    }
-
-    /**
-     * Obtener PDF de un comprobante por su UUID
-     */
-    public function getPdfById(string $id)
-    {
-        try {
-            $validator = \Validator::make(['id' => $id], [
-                'id' => ['required', 'uuid']
-            ]);
-
-            if ($validator->fails()) {
-                return $this->sendError('ID no válido', $validator->errors(), 422);
-            }
-
-            $comprobante = Comprobante::findOrFail($id);
-            Gate::authorize('view', $comprobante);
-
-            $fileName = '';
-            $pdfContent = $this->fileGenerationService->generatePdfContent($comprobante, $fileName);
-
-            return response($pdfContent)
-                ->header('Content-Type', 'application/pdf')
-                ->header('Content-Disposition', 'attachment; filename="' . $fileName . '"');
-        } catch (AuthorizationException $e) {
-            return $this->sendError('Acceso denegado', $e->getMessage(), 403);
-        } catch (ModelNotFoundException $e) {
-            return $this->sendError('Comprobante no encontrado', 'No se encontró el comprobante con el ID proporcionado.', 404);
-        } catch (\Exception $e) {
-            return $this->sendError('Error al generar el PDF', $e->getMessage(), 500);
-        }
-    }
-
-    /**
-     * Obtener estado de un comprobante por su UUID
-     */
-    public function getEstadoById(string $id)
-    {
-        try {
-            // Validar UUID
-            $validator = \Validator::make(['id' => $id], [
-                'id' => ['required', 'uuid']
-            ]);
-
-            if ($validator->fails()) {
-                return $this->sendError('ID no válido', $validator->errors(), 422);
-            }
-
-            // Buscar comprobante por PK (UUID)
-            $comprobante = Comprobante::findOrFail($id); // <-- usar 'id', que es UUID en la tabla
-
-            // Autorización (opcional)
-            Gate::authorize('view', $comprobante);
-
-            return $this->sendResponse(
-                'Estado del comprobante obtenido correctamente.',
-                $comprobante,
-                200
-            );
-        } catch (AuthorizationException $e) {
-            return $this->sendError('Acceso denegado', $e->getMessage(), 403);
-        } catch (ModelNotFoundException $e) {
-            return $this->sendError('Comprobante no encontrado', 'No se encontró el comprobante con el ID proporcionado.', 404);
-        } catch (\Exception $e) {
-            return $this->sendError('Error al obtener el estado del comprobante', $e->getMessage(), 500);
-        }
-    }
-
-    /**
-     * Re-enviar webhook para un comprobante específico por UUID
-     */
-    public function resendWebhookById(string $id)
-    {
-        try {
-            $validator = \Validator::make(['id' => $id], [
-                'id' => ['required', 'uuid']
-            ]);
-
-            if ($validator->fails()) {
-                return $this->sendError('ID no válido', $validator->errors(), 422);
-            }
-
-            $comprobante = Comprobante::findOrFail($id);
-            Gate::authorize('view', $comprobante);
-
-            $payload = json_decode($comprobante->payload, true);
-            $saleId = $payload['saleId'] ?? null;
-            $callbackUrl = $payload['callbackUrl'] ?? null;
-
-            if (!$saleId || !$callbackUrl) {
-                return $this->sendError(
-                    'Webhook no configurado',
-                    'Este comprobante no tiene configurado webhook callback',
-                    404
-                );
-            }
-
-            // Determinar datos para el callback basado en el estado
-            $success = in_array($comprobante->estado, ['autorizado', 'firmado']);
-            $data = [
-                'estado_sri' => $comprobante->estado,
-                'clave_acceso' => $comprobante->clave_acceso,
-                'numero_autorizacion' => $comprobante->numero_autorizacion,
-                'fecha_autorizacion' => $comprobante->fecha_autorizacion,
-            ];
-
-            if (!$success) {
-                $data['error_message'] = $comprobante->error_message;
-            }
-
-            // Instanciar job para reutilizar la lógica de envío
-            $job = new GenerarComprobanteJob(
-                $comprobante,
-                $comprobante->user,
-                $comprobante->puntoEmision,
-                TipoComprobanteEnum::from($comprobante->tipo_comprobante)
-            );
-
-            $job->enviarCallbackSistemaExterno($success, $data);
-
-            return $this->sendResponse(
-                'Webhook re-enviado exitosamente',
-                [
-                    'comprobante_id' => $comprobante->id,
-                    'estado' => $comprobante->estado,
-                    'callback_url' => $callbackUrl,
-                    'sale_id' => $saleId,
-                    'success' => $success
-                ]
-            );
-        } catch (ModelNotFoundException $e) {
-            return $this->sendError('Comprobante no encontrado', [], 404);
-        } catch (AuthorizationException $e) {
-            return $this->sendError('Acceso denegado', $e->getMessage(), 403);
-        } catch (\Exception $e) {
-            return $this->sendError('Error al re-enviar webhook', $e->getMessage(), 500);
         }
     }
 
@@ -443,6 +293,7 @@ class ComprobantesController extends Controller
             return response($pdfContent)
                 ->header('Content-Type', 'application/pdf')
                 ->header('Content-Disposition', 'attachment; filename="' . $fileName . '"');
+
         } catch (AuthorizationException $e) {
             return $this->sendError('Acceso denegado', $e->getMessage(), 403);
         } catch (ModelNotFoundException $e) {
@@ -457,9 +308,12 @@ class ComprobantesController extends Controller
     public function descargarMasivo(Request $request)
     {
         $validator = \Validator::make($request->all(), [
-            'claves_acceso' => ['required', 'array'],
+            'claves_acceso' => ['nullable', 'array'],
             'claves_acceso.*' => ['string', 'size:49', 'regex:/^[0-9]+$/'],
             'format' => ['required', 'string', 'in:pdf,xml'],
+            'fecha_desde' => ['nullable', 'date'],
+            'fecha_hasta' => ['nullable', 'date', 'after_or_equal:fecha_desde'],
+            'product_code' => ['nullable', 'string', 'max:255'],
         ]);
 
         if ($validator->fails()) {
@@ -467,8 +321,63 @@ class ComprobantesController extends Controller
         }
 
         $user = Auth::user();
-        $clavesAcceso = $request->input('claves_acceso');
         $format = $request->input('format');
+        $clavesAcceso = [];
+
+        if ($request->has('claves_acceso')) {
+            $clavesAcceso = $request->input('claves_acceso');
+        } else {
+            // Start with a fresh query, select distinct comprobantes to handle multiple products per invoice
+            $query = Comprobante::query()->select('comprobantes.*')->distinct();
+
+            // Base conditions with qualified column names
+            $query->where('comprobantes.user_id', $user->id);
+            $query->where('comprobantes.estado', 'autorizado');
+
+            if ($request->filled('fecha_desde')) {
+                $query->whereDate('comprobantes.fecha_emision', '>=', $request->fecha_desde);
+            }
+
+            if ($request->filled('fecha_hasta')) {
+                $query->whereDate('comprobantes.fecha_emision', '<=', $request->fecha_hasta);
+            }
+
+            $comprobantes = $query->get();
+
+            if ($request->filled('product_code')) {
+                $productCode = $request->product_code;
+
+                // Filter the collection in PHP memory to ensure the logic is identical to what the user sees elsewhere.
+                // This avoids database-specific JSON query issues.
+                $comprobantes = $comprobantes->filter(function ($comprobante) use ($productCode) {
+                    $payload = $comprobante->payload;
+
+                    // Handle cases where the payload might be a double-encoded JSON string.
+                    if (is_string($payload)) {
+                        $payload = json_decode($payload, true);
+                    }
+
+                    if (!isset($payload['detalles']) || !is_array($payload['detalles'])) {
+                        return false;
+                    }
+
+                    foreach ($payload['detalles'] as $detalle) {
+                        // Use a loose comparison to handle "123" == 123
+                        if (isset($detalle['codigoPrincipal']) && $detalle['codigoPrincipal'] == $productCode) {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                });
+            }
+
+            $clavesAcceso = $comprobantes->pluck('clave_acceso')->toArray();
+        }
+
+        if (empty($clavesAcceso)) {
+            return $this->sendError('No se encontraron comprobantes', 'No hay comprobantes que coincidan con los filtros seleccionados.', 404);
+        }
 
         $job = BulkDownloadJob::create([
             'user_id' => $user->id,
@@ -476,9 +385,36 @@ class ComprobantesController extends Controller
             'total_files' => count($clavesAcceso),
         ]);
 
-        CreateBulkDownloadZipJob::dispatch($job, $clavesAcceso);
+        $chunks = array_chunk($clavesAcceso, 200); // Process 200 invoices per job
+        $batchJobs = [];
+        foreach ($chunks as $chunk) {
+            $batchJobs[] = new ProcessBulkDownloadChunkJob($job, $chunk);
+        }
 
-        return $this->sendResponse('La solicitud de descarga ha sido aceptada y se está procesando en segundo plano.', ['job_id' => $job->id], 202);
+        $batch = Bus::batch($batchJobs)
+            ->then(function () use ($job) {
+                // All jobs completed successfully...
+                CreateFinalZipJob::dispatch($job);
+            })
+            ->catch(function () use ($job) {
+                // A job in the batch failed...
+                $job->update(['status' => \App\Enums\BulkDownloadStatusEnum::FAILED]);
+            })
+            ->finally(function () use ($job) {
+                // The batch has finished executing...
+            })
+            ->name('Bulk Download Job ID: ' . $job->id)
+            ->dispatch();
+
+        // Add batch_id to the job model so the frontend can optionally use it.
+        // Note: This is not persisted to the database.
+        $job->batch_id = $batch->id;
+
+        return $this->sendResponse(
+            'La solicitud de descarga ha sido aceptada y se está procesando en segundo plano.',
+            $job, // Return the full job object
+            202
+        );
     }
 
     public function getBulkDownloadStatus(string $jobId)
@@ -522,9 +458,37 @@ class ComprobantesController extends Controller
         }
     }
 
-    public function generateFactura(FacturaRequest $request, PuntoEmision $puntoEmision)
+
+    public function getProductCodes()
     {
-        $validated_data = null;
+        $user = Auth::user();
+        $comprobantes = Comprobante::where('user_id', $user->id)
+            ->where('estado', 'autorizado')
+            ->get();
+
+        $productCodes = [];
+        foreach ($comprobantes as $comprobante) {
+            $payload = $comprobante->payload;
+            if (is_string($payload)) {
+                $payload = json_decode($payload, true);
+            }
+
+            if (isset($payload['detalles']) && is_array($payload['detalles'])) {
+                foreach ($payload['detalles'] as $detalle) {
+                    if (isset($detalle['codigoPrincipal'])) {
+                        $productCodes[] = $detalle['codigoPrincipal'];
+                    }
+                }
+            }
+        }
+
+        $uniqueProductCodes = array_values(array_unique($productCodes));
+
+        return $this->sendResponse('Códigos de producto recuperados exitosamente.', $uniqueProductCodes);
+    }
+
+    public function generateFactura(FacturaRequest $request, PuntoEmision $puntoEmision, SincronoComprobanteService $sincronoService)
+    {
         try {
             // 1. Autorizar acceso a punto de emision de usuario
             Gate::authorize('view', $puntoEmision);
@@ -536,171 +500,67 @@ class ComprobantesController extends Controller
             // 3. Validar datos del comprobante
             $validated_data = $request->validated();
 
-            // Si no se proporciona fecha de emisión, usar la fecha actual del servidor
-            if (!isset($validated_data['fechaEmision'])) {
-                $validated_data['fechaEmision'] = now()->format('Y-m-d');
-            }
+            // Siempre usar la fecha y hora del servidor para asegurar la precisión.
+            $validated_data['fechaEmision'] = now()->format('Y-m-d H:i:s');
 
-            // 🔥 USAR EL NUEVO SERVICIO AccessKeyGenerator (estático)
-            $claveAcceso = AccessKeyGenerator::generate([
-                'fechaEmision' => $validated_data['fechaEmision'],
-                'codDoc' => TipoComprobanteEnum::FACTURA->value,
-                'ruc' => $user->ruc,
-                'ambiente' => $user->ambiente,
-                'estab' => $puntoEmision->establecimiento->numero,
-                'ptoEmi' => $puntoEmision->numero,
-                'secuencial' => $puntoEmision->proximo_secuencial,
-            ]);
-
-            // Validar webhook callback
-            $saleId = $request->input('saleId');
-            $callbackUrl = $request->input('callbackUrl');
-
-            if (($saleId && !$callbackUrl) || (!$saleId && $callbackUrl)) {
-                return $this->sendError(
-                    'Parámetros incompletos',
-                    'Si proporciona saleId o callbackUrl, ambos deben estar presentes',
-                    422
-                );
-            }
-
-            if ($callbackUrl) {
-                $urlValidator = \Validator::make(['callbackUrl' => $callbackUrl], [
-                    'callbackUrl' => ['required', 'url', 'active_url']
-                ]);
-
-                if ($urlValidator->fails()) {
-                    return $this->sendError(
-                        'URL de callback no válida',
-                        $urlValidator->errors(),
-                        422
-                    );
-                }
-            }
-
-            // Agregar al payload si están presentes
-            if ($saleId && $callbackUrl) {
-                $validated_data['saleId'] = $saleId;
-                $validated_data['callbackUrl'] = $callbackUrl;
-            }
-
-            // 4. Generar comprobante CON LA CLAVE DE ACCESO
-            try {
-                $comprobante = Comprobante::create([
-                    'user_id' => $user->id,
-                    'tipo_comprobante' => TipoComprobanteEnum::FACTURA->value,
-                    'ambiente' => $user->ambiente,
-                    'cliente_email' => $validated_data['infoAdicional']['email'] ?? null,
-                    'cliente_ruc' => $validated_data['identificacionComprador'],
-                    'fecha_emision' => $validated_data['fechaEmision'],
-                    'clave_acceso' => $claveAcceso, // 🔥 GUARDAR CLAVE DE ACCESO
-                    'payload' => json_encode($validated_data),
-                    'estado' => EstadosComprobanteEnum::PENDIENTE->value,
-                ]);
-            } catch (\Exception $e) {
-                throw new \Exception('Error al registrar el comprobante: ' . $e->getMessage());
-            }
-
-            // 5. Lanzar job de generación de comprobante PASANDO LA CLAVE DE ACCESO
-            \Log::info("Llamando a job para comprobante: {$comprobante->id} con clave: {$claveAcceso}");
-            GenerarComprobanteJob::dispatch(
-                $comprobante,
+            // 4. Procesar comprobante de forma síncrona
+            $comprobante = $sincronoService->procesarComprobante(
+                $validated_data,
                 $user,
                 $puntoEmision,
-                TipoComprobanteEnum::FACTURA,
-                $claveAcceso
+                TipoComprobanteEnum::FACTURA
             );
-
-
-            // Respuesta con información completa
-            $responseData = [
-                'comprobante_id' => $comprobante->id,
-                'clave_acceso' => $claveAcceso,
-                'estado' => $comprobante->estado,
-                'processing' => true,
-                'timestamp' => now()->toISOString(),
-            ];
-
-            // Incluir info del webhook si se configuró
-            if ($saleId && $callbackUrl) {
-                $responseData['webhook'] = [
-                    'saleId' => $saleId,
-                    'callbackUrl' => $callbackUrl,
-                    'notificacion' => 'Se enviará notificación al finalizar el procesamiento'
-                ];
-            }
 
             return $this->sendResponse(
-                'Tu comprobante se está procesando. Recibirás una notificación cuando esté listo',
-                $responseData
+                'Factura generada y autorizada exitosamente.',
+                $comprobante,
+                201
             );
+
         } catch (AuthorizationException $e) {
             return $this->sendError('Acceso denegado', $e->getMessage(), $e->status());
+        } catch (SriException $e) {
+            return $this->sendError(
+                'Error del SRI',
+                ['sri_error' => $e->getMessage()],
+                422 // Unprocessable Entity
+            );
         } catch (\Exception $e) {
-            return $this->sendError('Error al generar la factura', $e->getMessage(), 500, $validated_data);
+            return $this->sendError('Error al generar la factura', $e->getMessage(), 500);
         }
     }
 
-    /**
-     * Re-enviar webhook para un comprobante específico
-     */
-    public function resendWebhook(string $comprobanteId)
+    public function getPersona($id)
     {
         try {
-            $comprobante = Comprobante::findOrFail($comprobanteId);
-            Gate::authorize('view', $comprobante);
+            $token = config('services.personas.token');
+            $baseUrl = config('services.personas.base_url');
 
-            $payload = json_decode($comprobante->payload, true);
-            $saleId = $payload['saleId'] ?? null;
-            $callbackUrl = $payload['callbackUrl'] ?? null;
+            $isRuc = strlen($id) == 13;
+            $url = $baseUrl . ($isRuc ? "api/ruc/" . $id : "api/ci/" . $id);
 
-            if (!$saleId || !$callbackUrl) {
-                return $this->sendError(
-                    'Webhook no configurado',
-                    'Este comprobante no tiene configurado webhook callback',
-                    404
-                );
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $token,
+                'User-agent' => 'Laravel',
+            ])->get($url);
+
+            if ($response->successful()) {
+                $apiData = $response->json();
+
+                if ($isRuc && isset($apiData['data'])) {
+                    // For RUC lookups, the API provides 'name'. The frontend expects 'full_name'.
+                    $apiData['data']['full_name'] = $apiData['data']['name'] ?? '';
+                }
+                // For CI lookups, the API already provides 'full_name', so no changes are needed.
+
+                return $this->sendResponse('Datos de persona recuperados exitosamente.', $apiData);
+            } else {
+                Log::warning('Solicitud a API Personas fallida: ' . $response->status(), ['id' => $id, 'response' => $response->body()]);
+                return $this->sendError('No se pudo obtener los datos de la persona.', [], $response->status());
             }
-
-            // Determinar datos para el callback basado en el estado
-            $success = in_array($comprobante->estado, ['autorizado', 'firmado']);
-            $data = [
-                'estado_sri' => $comprobante->estado,
-                'clave_acceso' => $comprobante->clave_acceso,
-                'numero_autorizacion' => null,
-                'fecha_autorizacion' => $comprobante->fecha_autorizacion,
-            ];
-
-            if (!$success) {
-                $data['error_message'] = $comprobante->error_message;
-            }
-
-            // Instanciar job para reutilizar la lógica de envío
-            $job = new GenerarComprobanteJob(
-                $comprobante,
-                $comprobante->user,
-                $comprobante->puntoEmision,
-                TipoComprobanteEnum::from($comprobante->tipo_comprobante)
-            );
-
-            $job->enviarCallbackSistemaExterno($success, $data);
-
-            return $this->sendResponse(
-                'Webhook re-enviado exitosamente',
-                [
-                    'comprobante_id' => $comprobante->id,
-                    'estado' => $comprobante->estado,
-                    'callback_url' => $callbackUrl,
-                    'sale_id' => $saleId,
-                    'success' => $success
-                ]
-            );
-        } catch (ModelNotFoundException $e) {
-            return $this->sendError('Comprobante no encontrado', [], 404);
-        } catch (AuthorizationException $e) {
-            return $this->sendError('Acceso denegado', $e->getMessage(), 403);
         } catch (\Exception $e) {
-            return $this->sendError('Error al re-enviar webhook', $e->getMessage(), 500);
+            Log::error('Excepción en solicitud a API Personas: ' . $e->getMessage() . ' Trace: ' . $e->getTraceAsString(), ['id' => $id]);
+            return $this->sendError('Ocurrió un error al consultar el servicio de personas.', [], 500);
         }
     }
 }

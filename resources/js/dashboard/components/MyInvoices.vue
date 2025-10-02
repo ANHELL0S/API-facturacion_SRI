@@ -1,25 +1,12 @@
 <template>
-  <div :class="{ '-mx-4 sm:-mx-6 lg:-mx-8': currentTab === 'authorized' }">
+  <div>
     <div class="flex justify-between items-center mb-4 px-4 sm:px-6 lg:px-8">
       <h2 class="text-2xl font-bold text-gray-800">Mis Comprobantes</h2>
         <div class="flex items-center space-x-2">
             <!-- Download Button -->
-            <div v-if="currentTab === 'authorized'" class="relative inline-block text-left">
-                <div>
-                    <button type="button" @click="isDropdownOpen = !isDropdownOpen" class="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 focus:ring-indigo-500" id="options-menu" aria-haspopup="true" aria-expanded="true">
-                        Descargar todo
-                        <svg class="-mr-1 ml-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                            <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
-                        </svg>
-                    </button>
-                </div>
-                <div v-if="isDropdownOpen" class="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
-                    <div class="py-1" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
-                        <a href="#" @click.prevent="downloadAll('xml')" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Descargar todo (XML)</a>
-                        <a href="#" @click.prevent="downloadAll('pdf')" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Descargar todo (PDF)</a>
-                    </div>
-                </div>
-            </div>
+            <BaseButton v-if="currentTab === 'authorized'" @click="isDescargaMasivaModalVisible = true" variant="primary">
+                Descargar por Lotes
+            </BaseButton>
             <BaseButton v-if="currentTab === 'authorized'" @click="openExportModal" variant="secondary">
                 <template #icon>
                     <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -32,6 +19,11 @@
             </BaseButton>
             <RefreshButton :is-loading="isLoading" @click="getInvoices(false)" />
         </div>
+    </div>
+
+    <!-- Download Progress Bars -->
+    <div v-if="downloadStore.activeBulkDownloads.length > 0" class="fixed bottom-4 right-4 w-72 space-y-2 flex flex-col-reverse">
+        <DownloadProgressBar v-for="job in downloadStore.activeBulkDownloads" :key="job.id" :job="job" />
     </div>
 
     <div class="mb-4 border-b border-gray-200">
@@ -70,7 +62,7 @@
       <div v-else class="flex flex-col">
           <div class="-my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
               <div class="py-2 align-middle inline-block min-w-full sm:px-6 lg:px-8">
-                  <DataTable :data="paginatedInvoices" :headers="headers" :sort-key="sortKey" :sort-order="sortOrder" @sort="sortBy" @download-xml="downloadXml" @download-pdf="downloadPdf" @preview-pdf="openPdfPreview" @toggle-error-expansion="toggleErrorExpansion" />
+                  <DataTable :data="paginatedInvoices" :headers="headers" :sort-key="sortKey" :sort-order="sortOrder" @sort="sortBy" @download-xml="downloadXml" @download-pdf="downloadPdf" @preview-pdf="openPdfPreview" @toggle-error-expansion="toggleErrorExpansion" @toggle-expansion="toggleExpansion" />
               </div>
           </div>
           <div v-if="totalPages > 1" class="py-4 px-6 flex justify-center">
@@ -92,6 +84,13 @@
       @export-by-date="handleExportByDate"
       @export-all="handleExportAll"
     />
+
+    <DescargaMasivaModal
+      :show="isDescargaMasivaModalVisible"
+      :token="token"
+      @close="isDescargaMasivaModalVisible = false"
+      @descargar="handleDescargaMasiva"
+    />
   </div>
 </template>
 
@@ -102,10 +101,12 @@ import Pagination from './Pagination.vue';
 import TableSkeleton from './TableSkeleton.vue';
 import RefreshButton from './RefreshButton.vue';
 import PdfPreviewModal from './PdfPreviewModal.vue';
-import downloadStore from '../utils/downloadStore.js';
 import * as XLSX from 'xlsx';
 import BaseButton from './BaseButton.vue';
 import ExportExcelModal from './ExportExcelModal.vue';
+import DescargaMasivaModal from './DescargaMasivaModal.vue';
+import DownloadProgressBar from './DownloadProgressBar.vue';
+import downloadStore from '../utils/downloadStore.js';
 
 export default {
   name: 'MyInvoices',
@@ -117,6 +118,8 @@ export default {
     PdfPreviewModal,
     BaseButton,
     ExportExcelModal,
+    DescargaMasivaModal,
+    DownloadProgressBar,
   },
   props: {
     token: {
@@ -126,7 +129,11 @@ export default {
     isSidebarOpen: {
         type: Boolean,
         default: false,
-    }
+    },
+    ambiente: {
+        type: String,
+        default: null, // '1' for Pruebas, '2' for Producción
+    },
   },
   data() {
     return {
@@ -136,7 +143,6 @@ export default {
       currentPage: 1,
       itemsPerPage: 10,
       currentTab: 'all',
-      isDropdownOpen: false,
       searchQuery: '',
       sortKey: 'fecha_emision',
       sortOrder: 'desc',
@@ -144,36 +150,49 @@ export default {
       selectedPdfUrl: '',
       isPreviewLoading: false,
       isExportModalVisible: false,
+      isDescargaMasivaModalVisible: false,
+      downloadStore: downloadStore,
     };
   },
   computed: {
-    headers() {
-        const baseHeaders = [
-            { text: 'Número de Factura', value: 'numero_factura' },
-            { text: 'Cliente', value: 'cliente' },
-            { text: 'Fecha de Emisión', value: 'fecha_emision' },
-            { text: 'Valor', value: 'valor' },
-            { text: 'Estado', value: 'estado' },
-        ];
+   headers() {
+    let baseHeaders = [
+        { text: 'Número de Factura', value: 'numero_factura' },
+        { text: 'Cliente', value: 'cliente' },
+        { text: 'Fecha de Emisión', value: 'fecha_emision' },
+        { text: 'Valor', value: 'valor' },
+        { text: 'Estado', value: 'estado' },
+    ];
 
-        let finalHeaders = [...baseHeaders];
+    if (this.currentTab === 'authorized') {
+        baseHeaders = baseHeaders.filter(h => h.value !== 'fecha_emision');
+    }
 
-        if (this.currentTab === 'authorized') {
-            finalHeaders.push({ text: 'Fecha de Autorización', value: 'fecha_autorizacion' });
-        }
+    let finalHeaders = [...baseHeaders];
 
-        if (this.currentTab === 'unauthorized') {
-            finalHeaders.push({ text: 'Mensaje de Error', value: 'error_message' });
-        }
+    if (this.currentTab === 'authorized') {
+        // Insertar "Código de Producto" como primera columna
+        finalHeaders.unshift({ text: 'Código de Producto', value: 'producto' });
+        finalHeaders.push({ text: 'Fecha de Autorización', value: 'fecha_autorizacion' });
+    }
 
-        if (this.currentTab === 'all' || this.currentTab === 'authorized') {
-            finalHeaders.push({ text: 'Acciones', value: 'acciones' });
-        }
+    if (this.currentTab === 'unauthorized') {
+        finalHeaders.push({ text: 'Mensaje de Error', value: 'error_message' });
+    }
 
-        return finalHeaders;
-    },
+    if (this.currentTab === 'all' || this.currentTab === 'authorized') {
+        finalHeaders.push({ text: 'Acciones', value: 'acciones' });
+    }
+
+    return finalHeaders;
+},
     processedInvoices() {
       let processed = [...this.invoices];
+
+      // 0. Filter by ambiente if prop is provided
+      if (this.ambiente) {
+        processed = processed.filter(i => String(i.ambiente) === this.ambiente);
+      }
 
       // 1. Filter by tab
       switch (this.currentTab) {
@@ -205,7 +224,8 @@ export default {
           const numeroFactura = (invoice.numero_factura || '').toLowerCase();
           const cliente = (invoice.cliente || '').toLowerCase();
           const valor = String(invoice.valor || '').toLowerCase();
-          return numeroFactura.includes(lowerCaseQuery) || cliente.includes(lowerCaseQuery) || valor.includes(lowerCaseQuery);
+          const producto = (invoice.producto || '').toLowerCase();
+          return numeroFactura.includes(lowerCaseQuery) || cliente.includes(lowerCaseQuery) || valor.includes(lowerCaseQuery) || producto.includes(lowerCaseQuery);
         });
       }
 
@@ -240,6 +260,9 @@ export default {
     this.polling = setInterval(() => {
         this.getInvoices(true); // Pass true to indicate a background poll
     }, 10000); // Poll every 10 seconds
+
+    downloadStore.setToken(this.token);
+    downloadStore.setEmitter(this.$emitter);
   },
   watch: {
     currentTab() {
@@ -251,6 +274,7 @@ export default {
   },
   beforeUnmount() {
     clearInterval(this.polling);
+    downloadStore.clearPollers();
   },
   methods: {
     async openPdfPreview(claveAcceso) {
@@ -315,12 +339,15 @@ export default {
         this.isLoading = true;
       }
       try {
+        const params = {
+            search: this.searchQuery,
+        };
         const response = await axios.get('/api/comprobantes', {
           headers: { 'Authorization': `Bearer ${this.token}` },
-          params: { per_page: 100 } // Fetch a good number of invoices
+          params,
         });
       
-        this.invoices = response.data.data.data.map(invoice => {
+        this.invoices = response.data.data.map(invoice => {
           let payload = {};
           try {
             if (typeof invoice.payload === 'string') {
@@ -333,13 +360,17 @@ export default {
             payload = {}; // Ensure payload is an object on error
           }
 
+          const producto = payload.detalles && payload.detalles[0] ? payload.detalles[0].codigoPrincipal : 'N/A';
+
           return {
             ...invoice,
             fecha_emision: this.formatDateTime(invoice.fecha_emision),
             numero_factura: `${invoice.establecimiento}-${invoice.punto_emision}-${invoice.secuencial}`,
             cliente: payload.razonSocialComprador || 'N/A',
             valor: payload.importeTotal || 0,
+            producto,
             isErrorExpanded: false,
+            isExpanded: false,
           };
         });
       } catch (error) {
@@ -354,6 +385,12 @@ export default {
       const invoice = this.invoices.find(i => i.id === invoiceId);
       if (invoice) {
         invoice.isErrorExpanded = !invoice.isErrorExpanded;
+      }
+    },
+    toggleExpansion(invoiceId) {
+      const invoice = this.invoices.find(i => i.id === invoiceId);
+      if (invoice) {
+        invoice.isExpanded = !invoice.isExpanded;
       }
     },
     async downloadXml(claveAcceso) {
@@ -414,9 +451,8 @@ export default {
         }
       }
     },
-    downloadAll(format) {
-        this.isDropdownOpen = false;
-        downloadStore.downloadAll(this.processedInvoices, format);
+    async handleDescargaMasiva(filters) {
+        downloadStore.downloadWithFilters(filters);
     },
 
     openExportModal() {
@@ -463,15 +499,18 @@ export default {
                     payload = {};
                 }
 
+                const detalles = payload.detalles && payload.detalles[0];
+
                 return {
                     'Número de Factura': `${invoice.establecimiento}-${invoice.punto_emision}-${invoice.secuencial}`,
                     'Cliente': payload.razonSocialComprador || 'N/A',
+                    'Código de Producto': detalles ? detalles.codigoPrincipal : 'N/A',
                     'Fecha de Emisión': this.formatDateTime(invoice.fecha_emision),
                     'Valor': payload.importeTotal || 0,
                     'Estado': invoice.estado,
                     'Fecha de Autorización': this.formatDateTime(invoice.fecha_autorizacion),
                     'Clave de Acceso': invoice.clave_acceso,
-                    'Evento': payload.detalles && payload.detalles[0] ? payload.detalles[0].descripcion : (invoice.error_message || ''),
+                    'Evento': detalles ? detalles.descripcion : (invoice.error_message || ''),
                 };
             });
 
@@ -484,8 +523,12 @@ export default {
 
         } catch (error) {
             console.error('Error exporting to Excel:', error);
-            const errorMessage = error.response?.data?.message || 'Ocurrió un error inesperado.';
-            this.$emitter.emit('show-alert', { type: 'error', message: `Error al exportar a Excel: ${errorMessage}` });
+            if (error.response?.status === 404) {
+                this.$emitter.emit('show-alert', { type: 'warning', message: 'No se encontraron comprobantes con los filtros seleccionados.' });
+            } else {
+                const errorMessage = error.response?.data?.message || 'Ocurrió un error inesperado.';
+                this.$emitter.emit('show-alert', { type: 'error', message: `Error en la descarga: ${errorMessage}` });
+            }
         }
     },
   },

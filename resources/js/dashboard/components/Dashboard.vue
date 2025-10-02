@@ -14,12 +14,7 @@
     <!-- Billing Section -->
     <div v-if="currentDashboardView === 'billing'">
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-        <div class="lg:col-span-1 bg-white rounded-xl shadow-lg p-6">
-          <h3 class="text-xl font-bold mb-4 text-gray-800 border-b pb-3">Firma Electrónica</h3>
-          <p class="text-gray-600 mb-4">Cargue su certificado de firma electrónica para poder emitir comprobantes.</p>
-          <SignatureUpload />
-        </div>
-        <div class="lg:col-span-2 bg-white rounded-xl shadow-lg p-6">
+        <div class="lg:col-span-3 bg-white rounded-xl shadow-lg p-6">
           <h3 class="text-xl font-bold mb-4 text-gray-800 border-b pb-3">Cargar Archivo de Datos</h3>
           <p class="text-gray-600 mb-4">Seleccione un archivo de Excel (.xlsx, .xls) con los datos de los clientes y las facturas a emitir.</p>
           <a href="/plantilla_facturacion.xlsx" download class="text-blue-500 hover:text-blue-700 underline mb-4 block">
@@ -31,7 +26,7 @@
 
       <div class="bg-white rounded-xl shadow-lg">
         <div class="p-6">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                 <div>
                     <BaseSelect
                         id="establecimiento-select"
@@ -49,6 +44,15 @@
                         :options="puntoEmisionOptions"
                         :disabled="!selectedEstablecimientoId"
                         placeholder="Seleccione un punto de emisión"
+                    />
+                </div>
+                <div>
+                    <BaseSelect
+                        id="payment-method-select"
+                        label="Método de Pago (para todo el lote)"
+                        v-model="selectedPaymentMethod"
+                        :options="paymentMethodOptions"
+                        placeholder="Seleccione un método de pago"
                     />
                 </div>
             </div>
@@ -109,18 +113,12 @@
       </div>
     </div>
 
-    <!-- Status Section -->
-    <div v-if="currentDashboardView === 'status'">
-      <div class="bg-white rounded-xl shadow-lg p-6">
-        <h3 class="text-xl font-bold mb-4 text-gray-800 border-b pb-3">Estado de Factura</h3>
-        <p class="text-gray-600 mb-4">Verifique el estado de los servicios del SRI.</p>
-        <StatusChecker :token="token" />
-      </div>
-    </div>
-
     <!-- My Invoices Section -->
-    <div v-if="currentDashboardView === 'my-invoices'">
-      <MyInvoices :token="token" :is-sidebar-open="isSidebarOpen" />
+    <div v-if="currentDashboardView === 'my-invoices-test'">
+      <MyInvoices :token="token" :is-sidebar-open="isSidebarOpen" ambiente="1" />
+    </div>
+    <div v-if="currentDashboardView === 'my-invoices-prod'">
+      <MyInvoices :token="token" :is-sidebar-open="isSidebarOpen" ambiente="2" />
     </div>
 
     <!-- Corrective Billing Section -->
@@ -137,6 +135,11 @@
     <div v-if="currentDashboardView === 'configuration'">
       <Configuration :is-sidebar-open="isSidebarOpen" />
     </div>
+
+    <!-- Products Section -->
+    <div v-if="currentDashboardView === 'products'">
+      <ProductsManager :is-sidebar-open="isSidebarOpen" />
+    </div>
   </AppLayout>
 </template>
 
@@ -152,11 +155,12 @@ import IndividualBilling from './IndividualBilling.vue';
 import Pagination from './Pagination.vue';
 import BaseButton from './BaseButton.vue';
 import Configuration from './Configuration.vue';
+import ProductsManager from './ProductsManager.vue';
 import BaseAlert from './BaseAlert.vue';
 import BaseSelect from './BaseSelect.vue';
 import AppLayout from './AppLayout.vue';
 import axios from 'axios';
-import { parsePaymentMethods } from '../utils/paymentMethods.js';
+import { paymentMethodOptions } from '../utils/paymentMethods.js';
 
 const IconBilling = {
   render() { return h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24', xmlns: 'http://www.w3.org/2000/svg' }, [ h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': 2, d: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' }) ]); }
@@ -177,6 +181,10 @@ const IconConfig = {
   render() { return h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24', xmlns: 'http://www.w3.org/2000/svg' }, [ h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': 2, d: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' }), h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': 2, d: 'M15 12a3 3 0 11-6 0 3 3 0 016 0z' }) ]); }
 };
 
+const IconBox = {
+  render() { return h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24', xmlns: 'http://www.w3.org/2000/svg' }, [ h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': 2, d: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-14L4 7m0 0v10l8 4m0-14L4 7' }) ]); }
+};
+
 export default {
   name: 'Dashboard',
   components: {
@@ -190,6 +198,7 @@ export default {
     Pagination,
     BaseButton,
     Configuration,
+    ProductsManager,
     BaseAlert,
     BaseSelect,
     AppLayout,
@@ -207,7 +216,7 @@ export default {
         codigo_porcentaje_iva: '2',
       },
       isSidebarOpen: true,
-      currentDashboardView: 'billing',
+      currentDashboardView: 'individual-billing',
       tableData: [],
       tableHeaders: [
         { text: 'Nombres', value: 'Nombres' },
@@ -223,6 +232,8 @@ export default {
       puntosEmision: [],
       selectedEstablecimientoId: null,
       selectedPuntoEmisionId: null,
+      selectedPaymentMethod: '01',
+      paymentMethodOptions: paymentMethodOptions,
       filterStatus: 'Todos',
       currentPage: 1,
       itemsPerPage: 10,
@@ -266,13 +277,34 @@ export default {
         text: `${pto.numero} - ${pto.nombre}`,
       }));
     },
-    navigation() {
+      navigation() {
+      const advancedBillingChildren = [
+        { name: 'Facturación', view: 'billing', icon: IconBilling },
+        { name: 'Correctiva', view: 'corrective', icon: IconCorrective, count: this.correctiveInvoicesCount },
+      ];
+
+      const myInvoicesChildren = [
+        { name: 'Producción', view: 'my-invoices-prod', icon: IconInvoices },
+        { name: 'Prueba', view: 'my-invoices-test', icon: IconInvoices },
+   
+      ];
+
       return [
-        { name: 'Facturación Masiva', view: 'billing', icon: IconBilling },
-        { name: 'Facturación Individual', view: 'individual-billing', icon: IconIndividualBilling },
-        { name: 'Estado de factura', view: 'status', icon: IconStatus },
-        { name: 'Mis Comprobantes', view: 'my-invoices', icon: IconInvoices },
-        { name: 'Facturación Correctiva', view: 'corrective', icon: IconCorrective, count: this.correctiveInvoicesCount },
+        { name: 'Facturación', view: 'individual-billing', icon: IconIndividualBilling },
+         { name: 'Productos', view: 'products', icon: IconBox },
+        {
+            name: 'Mis Comprobantes',
+            icon: IconInvoices,
+            children: myInvoicesChildren,
+            view: 'my-invoices-test'
+        },
+       
+        {
+          name: 'Facturación Masiva',
+          icon: IconBilling, // Using a generic billing icon for the parent
+          children: advancedBillingChildren,
+          view: 'billing' // Default view when parent is clicked
+        },
         { name: 'Configuración', view: 'configuration', icon: IconConfig },
       ];
     },
@@ -487,11 +519,15 @@ export default {
       const totalSinImpuestos = precio / taxRate;
       const iva = precio - totalSinImpuestos;
 
-      const metodoPago = findValue('metodo de pago');
-      const pagos = parsePaymentMethods(metodoPago, precio).map(p => ({
-        ...p,
-        total: formatToString(p.total)
-      }));
+      const pagos = [{
+          formaPago: this.selectedPaymentMethod,
+          total: formatToString(precio)
+      }];
+
+      const infoAdicional = { email: email };
+      if (telefono) {
+          infoAdicional.telefono = telefono;
+      }
 
       return {
         // fechaEmision is now set by the server
@@ -524,7 +560,7 @@ export default {
                 valor: formatToString(iva)
             }],
         }],
-        infoAdicional: { email: email, telefono: telefono },
+        infoAdicional: infoAdicional,
       };
     },
     addFailedRowToCorrective(row, errorMessage) {
@@ -556,19 +592,34 @@ export default {
         this.tableData = this.tableData.filter(item => item.id !== row.id);
 
       } catch (error) {
-        const errorMessage = error.response?.data?.message || error.message;
-        if (error.message === 'Cédula no válida') {
-          this.addFailedRowToCorrective(row, 'Cédula debe tener 10 o 13 dígitos.');
-        } else if (error.message === 'Precio no válido') {
-          this.addFailedRowToCorrective(row, 'El Precio debe ser un número mayor a 0.');
-        } else if (error.message.includes('columnas requeridas')) {
-          this.addFailedRowToCorrective(row, 'Datos incompletos en la fila.');
-        } else if (errorMessage.includes('ERROR SECUENCIAL REGISTRADO')) {
-          // This error means the invoice was already processed successfully. Remove it.
-          this.tableData = this.tableData.filter(item => item.id !== row.id);
-        } else {
-          this.addFailedRowToCorrective(row, errorMessage);
+        console.log("Caught Error Object in Massive Billing:", JSON.stringify(error, null, 2));
+        if (error.response) {
+            console.log("Full Server Response in Massive Billing:", JSON.stringify(error.response.data, null, 2));
         }
+
+        let finalErrorMessage = "Ocurrió un error inesperado."; // Default message
+
+        const sriError = error.response?.data?.errors?.sri_error;
+        const apiMessage = error.response?.data?.message;
+        const genericError = error.message;
+
+        if (sriError) {
+            finalErrorMessage = sriError;
+        } else if (apiMessage) {
+            finalErrorMessage = apiMessage;
+        } else if (genericError) {
+            finalErrorMessage = genericError;
+        }
+        
+        if (error.message === 'Cédula no válida') {
+          finalErrorMessage = 'Cédula debe tener 10 o 13 dígitos.';
+        } else if (error.message === 'Precio no válido') {
+          finalErrorMessage = 'El Precio debe ser un número mayor a 0.';
+        } else if (error.message.includes('columnas requeridas')) {
+          finalErrorMessage = 'Datos incompletos en la fila.';
+        }
+        
+        this.addFailedRowToCorrective(row, finalErrorMessage);
       }
     },
     pauseBilling() {
@@ -619,7 +670,7 @@ export default {
         }
 
         // Cleanup after the loop is finished or cancelled
-        this.isBilling = false;
+        this.clearState(); // This clears tableData and sets isBilling to false
         this.isPaused = false;
         // Don't reset currentIndex here, so the progress bar stays at 100%
         // this.currentIndex = 0;

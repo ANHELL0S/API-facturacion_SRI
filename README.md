@@ -10,21 +10,21 @@ Sistema **stateless** completo para generación, firma y autorización de factur
 
 ## 📋 Características Principales
 
--   **Gestión de Usuarios:** Sistema completo de autenticación con JWT
--   **Documentación Interactiva:** Interfaz Swagger/OpenAPI para explorar endpoints
--   **Facturación Electrónica:** Generación, firma y autorización de comprobantes XML
--   **Control de Acceso:** Sistema robusto de roles y permisos
--   **Stateless:** Arquitectura sin estado para máxima escalabilidad
--   **Clientes API:** Generación automática de librerías cliente en múltiples lenguajes
+- **Gestión de Usuarios:** Sistema completo de autenticación con JWT
+- **Documentación Interactiva:** Interfaz Swagger/OpenAPI para explorar endpoints
+- **Facturación Electrónica:** Generación, firma y autorización de comprobantes XML
+- **Control de Acceso:** Sistema robusto de roles y permisos
+- **Stateless:** Arquitectura sin estado para máxima escalabilidad
+- **Clientes API:** Generación automática de librerías cliente en múltiples lenguajes
 
 ## 🔧 Requisitos Previos
 
--   PHP 8.1 o superior
--   Composer 2.x
--   Node.js 18+ y NPM
--   Laravel 11
--   MySQL/MariaDB
--   Java Runtime Environment (JRE) 8+ (para OpenAPI Generator y Firmador)
+- PHP 8.1 o superior
+- Composer 2.x
+- Node.js 18+ y NPM
+- Laravel 11
+- MySQL/MariaDB
+- Java Runtime Environment (JRE) 8+ (para OpenAPI Generator y Firmador)
 
 ## ⚙️ Instalación Local
 
@@ -87,8 +87,8 @@ La API utiliza **l5-swagger** para generar documentación interactiva OpenAPI/Sw
 
 ### Acceso a la documentación
 
--   **API Cliente:** `/api/documentation`
--   **API Admin:** `/admin-api/documentation`
+- **API Cliente:** `/api/documentation`
+- **API Admin:** `/admin-api/documentation`
 
 > **Nota:** La documentación del administrador requiere autenticación mediante el formulario en: `/swagger-login`
 
@@ -110,8 +110,8 @@ php artisan l5-swagger:generate --all
 El sistema permite generar librerías cliente para consumir la API desde diferentes lenguajes usando [OpenAPI Generator](https://openapi-generator.tech).
 
 > **IMPORTANTE**
-> Esta opción se encuentra disponible pero **no es recomendable** generar el cliente en el directorio del API.
-> Lo mejor es permitir a la aplicación cliente generarlo mediante el acceso al recurso .json.
+Esta opción se encuentra disponible pero **no es recomendable** generar el cliente en el directorio del API.
+Lo mejor es permitir a la aplicación cliente generarlo mediante el acceso al recurso .json.
 
 ### Instalación de OpenAPI Generator
 
@@ -145,8 +145,8 @@ Utiliza el endpoint `/api/login` con tus credenciales para obtener un token vál
 
 ```json
 {
-    "email": "usuario@ejemplo.com",
-    "password": "contraseña"
+  "email": "usuario@ejemplo.com",
+  "password": "contraseña"
 }
 ```
 
@@ -167,9 +167,9 @@ curl -X GET https://api.ejemplo.com/api/resource \
 
 ## 📦 Recursos y Librerías Externas
 
--   [Firmador SRI.jar](https://github.com/softec-apps/SRI-Signer) - Utilidad para firma digital
--   [XML-Wrangler](https://github.com/saloonphp/xml-wrangler) - Biblioteca para generación de XML
--   [OpenAPI Generator](https://openapi-generator.tech) - Generador de clientes API
+- [Firmador SRI.jar](https://github.com/softec-apps/SRI-Signer) - Utilidad para firma digital
+- [XML-Wrangler](https://github.com/saloonphp/xml-wrangler) - Biblioteca para generación de XML
+- [OpenAPI Generator](https://openapi-generator.tech) - Generador de clientes API
 
 ---
 
