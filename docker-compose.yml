@@ -15,16 +15,6 @@ services:
         depends_on:
             - laravel-db
         restart: unless-stopped
-        command: >
-            sh -c "composer install --no-dev --optimize-autoloader &&
-                   chown -R www-data:www-data /var/www &&
-                   chmod -R 755 /var/www &&
-                   chmod -R 775 storage bootstrap/cache &&
-                   sleep 10 &&
-                   php artisan migrate --force &&
-                   php artisan key:generate &&
-                   php artisan config:cache &&
-                   php-fpm"
 
     laravel-db:
         image: mysql:8.0.34
@@ -56,10 +46,7 @@ services:
         networks:
             - laravel-net
         restart: unless-stopped
-        command: >
-            sh -c "sleep 30 &&
-                   composer install --no-dev --optimize-autoloader &&
-                   php artisan queue:work --sleep=3 --tries=3"
+        command: sh -c "sleep 30 && php artisan queue:work --sleep=3 --tries=3"
 
     vite:
         image: node:20-alpine
@@ -67,16 +54,13 @@ services:
         working_dir: /var/www
         volumes:
             - .:/var/www
+            - /var/www/node_modules
         ports:
             - "5173:5173"
         networks:
             - laravel-net
         restart: unless-stopped
-        command: >
-            sh -c "npm install &&
-                   npm install react react-dom @vitejs/plugin-react &&
-                   npm run build &&
-                   sleep infinity"
+        command: sh -c "npm install && npm install react react-dom @vitejs/plugin-react && npm run build && sleep infinity"
 
 volumes:
     db_data:
