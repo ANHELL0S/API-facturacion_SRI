@@ -127,32 +127,96 @@ class PuntoEmisionController extends Controller
     public function update(Request $request, PuntoEmision $puntoEmision)
     {
         try {
-            // Validar acceso de actualización de establecimiento
+            // Verificar permisos
             \Gate::authorize('update', $puntoEmision);
 
-            // Validar los datos de la solicitud
+            // Validar los datos de entrada
             $validation = \Validator::make($request->all(), [
                 'nombre' => 'required|string|max:100',
-                'numero' => 'nullable|regex:/^\d{3}$/|unique:puntos_emision,numero,' . $puntoEmision->id . ',id,establecimiento_id,' . $puntoEmision->establecimiento_id . '|not_in:000',
+                'numero' => [
+                    'nullable',
+                    'regex:/^\d{3}$/',
+                    'not_in:000',
+                    \Illuminate\Validation\Rule::unique('puntos_emision')
+                        ->ignore($puntoEmision->id)
+                        ->where(fn($query) => $query->where('establecimiento_id', $puntoEmision->establecimiento_id)),
+                ],
                 'ultimoSecuencial' => 'nullable|regex:/^\d{9}$/',
+                'proximo_secuencial' => 'nullable|regex:/^\d{9}$/',
             ], [
                 'numero.regex' => 'El número debe ser un valor de tres dígitos.',
                 'numero.not_in' => 'El número no puede ser 000.',
                 'numero.unique' => 'El número ya está en uso para este establecimiento.',
+                'ultimoSecuencial.regex' => 'El último secuencial debe tener exactamente 9 dígitos.',
+                'proximo_secuencial.regex' => 'El próximo secuencial debe tener exactamente 9 dígitos.',
             ]);
+
             if ($validation->fails()) {
                 return $this->sendError('Datos no válidos', $validation->errors(), 422);
             }
 
             $validated_data = $validation->validated();
 
-            // Actualizar ultimo secuencial
-            if (isset($validated_data['ultimoSecuencial'])) {
-                $puntoEmision->ultimoSecuencial = $validated_data['ultimoSecuencial'];
+            // Actualizar nombre
+            if (isset($validated_data['nombre'])) {
+                $puntoEmision->nombre = $validated_data['nombre'];
             }
 
-            // Actualizar los datos del punto de emisión
-            $puntoEmision->nombre = $validated_data['nombre'];
+            // Actualizar número
+            if (isset($validated_data['numero'])) {
+                $puntoEmision->numero = $validated_data['numero'];
+            }
+
+            // Verificar el máximo secuencial
+            $maxSecuencial = intval($puntoEmision->max_secuenciales ?? '999999999');
+
+            // Si se envía proximo_secuencial, calcular ultimoSecuencial
+            if (isset($validated_data['proximo_secuencial'])) {
+                $proximoSecuencialInt = intval($validated_data['proximo_secuencial']);
+
+                // Verificar que no exceda el máximo
+                if ($proximoSecuencialInt > $maxSecuencial) {
+                    return $this->sendError(
+                        'El secuencial ha alcanzado su límite máximo',
+                        ['max_secuenciales' => $maxSecuencial],
+                        400
+                    );
+                }
+
+                // Validar que proximo_secuencial sea mayor a 0 para poder restar 1
+                if ($proximoSecuencialInt < 1) {
+                    return $this->sendError(
+                        'El próximo secuencial debe ser mayor a 000000000',
+                        [],
+                        400
+                    );
+                }
+
+                $puntoEmision->proximo_secuencial = $validated_data['proximo_secuencial'];
+
+                // Calcular ultimoSecuencial (próximo - 1)
+                $ultimoSecuencialInt = $proximoSecuencialInt - 1;
+                $puntoEmision->ultimoSecuencial = str_pad($ultimoSecuencialInt, 9, '0', STR_PAD_LEFT);
+            }
+            // Si se envía ultimoSecuencial, calcular proximo_secuencial
+            elseif (isset($validated_data['ultimoSecuencial'])) {
+                $ultimoSecuencialInt = intval($validated_data['ultimoSecuencial']);
+                $proximoSecuencialInt = $ultimoSecuencialInt + 1;
+
+                // Verificar que no exceda el máximo
+                if ($proximoSecuencialInt > $maxSecuencial) {
+                    return $this->sendError(
+                        'El secuencial ha alcanzado su límite máximo',
+                        ['max_secuenciales' => $maxSecuencial],
+                        400
+                    );
+                }
+
+                $puntoEmision->ultimoSecuencial = $validated_data['ultimoSecuencial'];
+                $puntoEmision->proximo_secuencial = str_pad($proximoSecuencialInt, 9, '0', STR_PAD_LEFT);
+            }
+
+            // Guardar cambios
             $puntoEmision->save();
 
             return $this->sendResponse('Punto de emisión actualizado exitosamente', $puntoEmision);
@@ -162,6 +226,7 @@ class PuntoEmisionController extends Controller
             return $this->sendError('Error al actualizar el punto de emisión', $e->getMessage(), 500);
         }
     }
+
 
 
     public function updateSecuencial(Request $request, PuntoEmision $punto_emision)
@@ -181,7 +246,6 @@ class PuntoEmisionController extends Controller
             $punto_emision->save();
 
             return $this->sendResponse('Secuencial actualizado correctamente.', $punto_emision);
-
         } catch (AuthorizationException $e) {
             return $this->sendError('Acceso denegado', $e->getMessage(), 403);
         } catch (\Exception $e) {

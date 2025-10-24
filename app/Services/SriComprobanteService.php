@@ -24,7 +24,7 @@ class SriComprobanteService
     {
         if (!isset(self::$soapClients[$wsdl])) {
             self::$soapClients[$wsdl] = new SoapClient($wsdl, [
-                'connection_timeout' => 3,
+                'connection_timeout' => 2,
                 'cache_wsdl' => WSDL_CACHE_BOTH,
                 'compression' => SOAP_COMPRESSION_ACCEPT | SOAP_COMPRESSION_GZIP,
                 'keep_alive' => true,

@@ -293,7 +293,6 @@ class ComprobantesController extends Controller
             return response($pdfContent)
                 ->header('Content-Type', 'application/pdf')
                 ->header('Content-Disposition', 'attachment; filename="' . $fileName . '"');
-
         } catch (AuthorizationException $e) {
             return $this->sendError('Acceso denegado', $e->getMessage(), 403);
         } catch (ModelNotFoundException $e) {
@@ -516,7 +515,6 @@ class ComprobantesController extends Controller
                 $comprobante,
                 201
             );
-
         } catch (AuthorizationException $e) {
             return $this->sendError('Acceso denegado', $e->getMessage(), $e->status());
         } catch (SriException $e) {

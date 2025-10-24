@@ -47,7 +47,7 @@ class AdminClientsController extends Controller implements HasMiddleware
                 ->paginate($perPage);
 
             return $this->sendResponse('Clientes recuperados exitosamente', $clients);
-        } catch(\Exception $e) {
+        } catch (\Exception $e) {
             return $this->sendError('No se pudo recuperar la lista de clientes', $e->getMessage(), 500);
         }
     }
@@ -64,7 +64,7 @@ class AdminClientsController extends Controller implements HasMiddleware
 
             // 2. Devolver la respuesta
             return $this->sendResponse('Cliente recuperado exitosamente', new UserResource($client));
-        } catch(\Exception $e) {
+        } catch (\Exception $e) {
             return $this->sendError('No se pudo recuperar el cliente', $e->getMessage(), 500);
         }
     }
@@ -205,7 +205,7 @@ class AdminClientsController extends Controller implements HasMiddleware
             return $this->sendResponse('Certificado y clave de firma cargados exitosamente', [
                 'expires_at' => $result['expires_at'],
             ]);
-        } catch(\Exception $e) {
+        } catch (\Exception $e) {
             return $this->sendError('No se pudo cargar el certificado', $e->getMessage(), 500);
         }
     }

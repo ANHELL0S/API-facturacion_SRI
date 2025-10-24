@@ -74,7 +74,6 @@ class CreateFinalZipJob implements ShouldQueue
                 'file_path' => $zipFileName,
                 'expires_at' => now()->addDay(),
             ]);
-
         } catch (Throwable $e) {
             $this->bulkDownloadJob->update(['status' => BulkDownloadStatusEnum::FAILED]);
             Log::error("Failed to create final zip for job {$this->bulkDownloadJob->id}: " . $e->getMessage());

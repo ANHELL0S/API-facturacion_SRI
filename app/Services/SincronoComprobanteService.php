@@ -133,21 +133,48 @@ class SincronoComprobanteService
             $outputFile = 'signed_' . $uniqueId . '.xml';
             $signedFilePath = $outputDir . '/' . $outputFile;
 
+            // VERIFICACIONES PREVIAS
+            Log::info('=== INICIANDO FIRMA ===', [
+                'signature_path' => $signatureFilePath,
+                'signature_exists' => file_exists($signatureFilePath),
+                'signature_readable' => is_readable($signatureFilePath),
+                'xml_path' => $xmlFilePath,
+                'xml_exists' => file_exists($xmlFilePath),
+                'output_dir' => $outputDir,
+                'output_writable' => is_writable($outputDir),
+            ]);
+
             $command = "java -jar " . escapeshellarg(base_path('app/firmador/sri-fat.jar')) . " " .
                 escapeshellarg($signatureFilePath) . " " .
                 escapeshellarg($password) . " " .
                 escapeshellarg($xmlFilePath) . " " .
-                escapeshellarg($outputDir) . " " . escapeshellarg($outputFile);
+                escapeshellarg($outputDir) . " " .
+                escapeshellarg($outputFile) . " 2>&1"; // Capturar stderr también
+
+            Log::info('Ejecutando comando de firma', ['command' => str_replace($password, '****', $command)]);
 
             exec($command, $output, $return_var);
 
+            // LOGGEAR TODO EL OUTPUT
+            Log::info('Resultado de ejecución del JAR', [
+                'return_code' => $return_var,
+                'output_lines' => $output,
+                'output_string' => implode("\n", $output),
+                'signed_file_exists' => file_exists($signedFilePath),
+            ]);
+
             if ($return_var !== 0 || !file_exists($signedFilePath)) {
-                Log::error('Error ejecutando el firmador.', ['output' => $output]);
-                throw new \Exception('Error ejecutando el firmador.');
+                $errorMsg = implode("\n", $output);
+                throw new \Exception('Error en firmador JAR: ' . $errorMsg . ' (código: ' . $return_var . ')');
             }
 
+            Log::info('Firma completada exitosamente', ['signed_file' => $signedFilePath]);
             return $signedFilePath;
         } catch (\Exception $e) {
+            Log::error('Excepción en firmarComprobante', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             throw new \Exception('Error al firmar el XML: ' . $e->getMessage());
         } finally {
             if (file_exists($xmlFilePath)) {
@@ -160,7 +187,16 @@ class SincronoComprobanteService
     {
         try {
             $recipientEmail = $payload['infoAdicional']['email'] ?? null;
-            if (!$recipientEmail) return;
+
+            // Si no existe el email o es 'sin@email.com', se omite el envío
+            if (!$recipientEmail || strtolower(trim($recipientEmail)) === 'sin@email.com') {
+                \Log::info('Omitiendo envío de factura: consumidor final o sin correo válido.', [
+                    'comprobante_id' => $comprobante->id,
+                    'cliente' => $payload['infoAdicional']['razonSocial'] ?? 'Desconocido',
+                    'email' => $recipientEmail,
+                ]);
+                return;
+            }
 
             $numeroComprobante = "{$comprobante->establecimiento}-{$comprobante->punto_emision}-{$comprobante->secuencial}";
             $subject = "Ha recibido su documento electrónico: FAC {$numeroComprobante}";

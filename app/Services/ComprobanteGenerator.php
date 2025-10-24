@@ -41,7 +41,7 @@ class ComprobanteGenerator
             Log::info('Comprobante generado y validado correctamente');
 
             return $generado;
-        } catch(\Exception $e) {
+        } catch (\Exception $e) {
             throw new \Exception('Error en el generador de comprobante: ' . $e->getMessage());
         }
     }

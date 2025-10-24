@@ -77,8 +77,8 @@ class EmittoEmailService
                 'x-key-emitto' => $this->secretKey,
                 'Accept' => 'application/json',
             ])
-            ->asMultipart()
-            ->post("{$this->baseUrl}/email/send", $multipart);
+                ->asMultipart()
+                ->post("{$this->baseUrl}/email/send", $multipart);
 
             if ($response->failed()) {
                 Log::error('EmittoEmailService: Falló el envío de correo (multipart).', [
@@ -90,7 +90,6 @@ class EmittoEmailService
 
             Log::info('EmittoEmailService: Correo enviado exitosamente a ' . $recipientEmail);
             return true;
-
         } catch (\Exception $e) {
             Log::error('EmittoEmailService: Excepción al enviar correo (multipart).', [
                 'message' => $e->getMessage(),

@@ -75,7 +75,6 @@ class ProcessBulkDownloadChunkJob implements ShouldQueue
                 }
 
                 $this->bulkDownloadJob->increment('processed_files');
-
             } catch (Throwable $e) {
                 Log::error("Error processing file for bulk download job {$this->bulkDownloadJob->id}: " . $e->getMessage());
             }
