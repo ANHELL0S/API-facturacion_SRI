@@ -1,118 +1,81 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nuevo Comprobante Electrónico</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
-        body {
-            font-family: 'Roboto', Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #eef2f5;
-            color: #3d4852;
-        }
-        .email-wrapper {
-            padding: 20px 0;
-        }
-        .email-container {
-            max-width: 600px;
-            margin: 0 auto;
-            background-color: #ffffff;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.05);
-            overflow: hidden;
-        }
-        .email-header {
-            padding: 30px;
-            text-align: center;
-            border-bottom: 1px solid #e2e8f0;
-        }
-        .email-header img {
-            max-width: 120px;
-        }
-        .email-body {
-            padding: 30px 40px;
-        }
-        .email-body h1 {
-            color: #2d3748;
-            font-size: 24px;
-            font-weight: 700;
-            margin-top: 0;
-            text-align: center;
-        }
-        .email-body p {
-            font-size: 16px;
-            line-height: 1.6;
-            margin: 0 0 1em;
-        }
-        .invoice-details {
-            margin: 25px 0;
-            padding: 20px;
-            background-color: #f7fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-        }
-        .invoice-details p {
-            margin: 0.5em 0;
-            font-size: 15px;
-        }
-        .invoice-details strong {
-            color: #2d3748;
-        }
-        .button-container {
-            text-align: center;
-            padding: 20px 0;
-        }
-        .button {
-            background-color: #38a89d;
-            color: #ffffff !important; /* Important to override default link colors */
-            padding: 14px 28px;
-            text-decoration: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 700;
-            display: inline-block;
-        }
-        .email-footer {
-            text-align: center;
-            padding: 25px;
-            font-size: 12px;
-            color: #718096;
-            background-color: #f7fafc;
-            border-top: 1px solid #e2e8f0;
-        }
-    </style>
-</head>
-<body>
-    <div class="email-wrapper">
-        <div class="email-container">
-            <div class="email-header">
-                @if(isset($logoUrl))
-                    <img src="{{ $logoUrl }}" alt="Logo de la Empresa">
-                @endif
-            </div>
-            <div class="email-body">
-                <h1>Ha Recibido un Nuevo Comprobante</h1>
-                <p>Estimado cliente,</p>
-                <p>Adjunto a este correo encontrará los archivos de su comprobante electrónico. A continuación, un resumen de la operación:</p>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html dir="ltr" lang="es">
+  <head>
+    <link rel="preload" as="image" href="{{ $logoUrl }}" />
+    <meta content="text/html; charset=UTF-8" http-equiv="Content-Type" />
+    <meta name="x-apple-disable-message-reformatting" />
+    <!--$-->
+  </head>
+  <body style="background-color:#ffffff">
+    <table
+      border="0"
+      width="100%"
+      cellpadding="0"
+      cellspacing="0"
+      role="presentation"
+      align="center">
+      <tbody>
+        <tr>
+          <td style="background-color:#ffffff">
+            <table
+              align="center"
+              width="100%"
+              border="0"
+              cellpadding="0"
+              cellspacing="0"
+              role="presentation"
+              style="max-width:37.5em;padding-left:12px;padding-right:12px;margin:0 auto">
+              <tbody>
+                <tr style="width:100%">
+                  <td>
+                    <h1
+                      style="color:#333;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;font-size:24px;font-weight:bold;margin:40px 0;padding:0">
+                      Factura electrónica
+                    </h1>
+                    
+                    <p
+                      style="font-size:14px;line-height:24px;color:#333;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;margin:24px 0;margin-bottom:14px;margin-top:24px;margin-right:0;margin-left:0">
+                      Estimado cliente,
+                    </p>
+                    
+                    <p
+                      style="font-size:14px;line-height:24px;color:#333;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;margin:24px 0;margin-bottom:14px;margin-top:24px;margin-right:0;margin-left:0">
+                      Adjunto a este correo encontrará los archivos de su comprobante electrónico. 
+                      A continuación, un resumen de la operación:
+                    </p>
 
-                <div class="invoice-details">
-                    <p><strong>Clave de Acceso:</strong><br>{{ $claveAcceso }}</p>
-                    <p><strong>Importe Total:</strong><br>${{ number_format($total, 2) }}</p>
-                </div>
+                    <p
+                      style="font-size:14px;line-height:24px;color:#ababab;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;margin:24px 0;margin-top:14px;margin-bottom:16px;margin-right:0;margin-left:0">
+                      Este es un correo electrónico generado automáticamente. Por favor, no responda a este mensaje.
+                    </p>
+                    
+                    <p
+                      style="font-size:14px;line-height:24px;color:#ababab;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;margin:24px 0;margin-top:12px;margin-bottom:38px;margin-right:0;margin-left:0">
+                      Conserve este comprobante para sus registros y futuras referencias.
+                    </p>
 
-                <p>Si desea visualizar el comprobante en formato PDF, puede hacerlo a través del siguiente botón:</p>
-
-                <div class="button-container">
-                    <a href="{{ $pdfUrl }}" class="button" target="_blank">Previsualizar PDF</a>
-                </div>
-            </div>
-            <div class="email-footer">
-                Este es un correo electrónico generado automáticamente. Por favor, no responda a este mensaje.
-            </div>
-        </div>
-    </div>
-</body>
+                    @if(isset($logoUrl))
+                    <img
+                      alt="Logo de la Empresa"
+                      height="32"
+                      src="{{ $logoUrl }}"
+                      style="display:block;outline:none;border:none;text-decoration:none"
+                      width="32" />
+                    @endif
+                    
+                    <p
+                      style="font-size:12px;line-height:22px;color:#898989;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;margin-top:12px;margin-bottom:24px">
+                      {{ $empresaNombre ?? 'Empresa' }}<br />
+                      Comprobantes electrónicos autorizados
+                    </p>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <!--/$-->
+  </body>
 </html>
