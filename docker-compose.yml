@@ -1,9 +1,15 @@
+version: "3.8"
+
 services:
     laravel-php:
         build:
             context: .
             dockerfile: Dockerfile
+            # Limitar memoria durante el build
+            shm_size: "256mb"
         container_name: laravel-php
+        restart: unless-stopped
+        working_dir: /var/www
         volumes:
             - .:/var/www
         ports:
@@ -11,8 +17,16 @@ services:
         networks:
             - laravel-net
         depends_on:
-            - laravel-db
-        restart: unless-stopped
+            laravel-db:
+                condition: service_healthy
+        # Limitar recursos en runtime
+        deploy:
+            resources:
+                limits:
+                    cpus: "1.0"
+                    memory: 384M
+                reservations:
+                    memory: 128M
 
     laravel-db:
         image: mysql:8.0.34
@@ -30,12 +44,38 @@ services:
         ports:
             - "3307:3306"
         command: --default-authentication-plugin=mysql_native_password
+        # Limitar recursos de MySQL para servidor pequeño
+        deploy:
+            resources:
+                limits:
+                    cpus: "0.5"
+                    memory: 256M
+                reservations:
+                    memory: 128M
+        # Health check para depends_on
+        healthcheck:
+            test:
+                [
+                    "CMD",
+                    "mysqladmin",
+                    "ping",
+                    "-h",
+                    "localhost",
+                    "-u",
+                    "root",
+                    "-pfactuZen_pass_root",
+                ]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 30s
 
     laravel-queue:
-        build:
-            context: .
-            dockerfile: Dockerfile
+        # IMPORTANTE: Usa la imagen ya construida en lugar de reconstruir
+        image: ${COMPOSE_PROJECT_NAME:-laravel}_laravel-php
         container_name: laravel-queue
+        restart: unless-stopped
+        working_dir: /var/www
         volumes:
             - .:/var/www
         depends_on:
@@ -43,25 +83,40 @@ services:
             - laravel-php
         networks:
             - laravel-net
-        restart: unless-stopped
-        command: sh -c "sleep 30 && php artisan queue:work php artisan storage:link --sleep=3 --tries=3"
+        command: sh -c "sleep 30 && php artisan storage:link && php artisan queue:work --sleep=3 --tries=3"
+        deploy:
+            resources:
+                limits:
+                    cpus: "0.5"
+                    memory: 256M
+                reservations:
+                    memory: 128M
 
     vite:
         image: node:20-alpine
         container_name: laravel-vite
+        restart: unless-stopped
         working_dir: /var/www
         volumes:
             - .:/var/www
-            - /var/www/node_modules
+            - node_modules:/var/www/node_modules
         ports:
             - "5173:5173"
         networks:
             - laravel-net
-        restart: unless-stopped
-        command: sh -c "npm install && npm install react react-dom @vitejs/plugin-react && npm run build && sleep infinity"
+        # Optimizar instalación de npm
+        command: sh -c "npm ci --prefer-offline --no-audit || npm install && npm install react react-dom @vitejs/plugin-react && npm run build && sleep infinity"
+        deploy:
+            resources:
+                limits:
+                    cpus: "1.0"
+                    memory: 384M
+                reservations:
+                    memory: 128M
 
 volumes:
     db_data:
+    node_modules:
 
 networks:
     laravel-net:

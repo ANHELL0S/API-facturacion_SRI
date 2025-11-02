@@ -37,24 +37,25 @@ RUN java -version
 # Configurar extensión GD
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg
 
-# Instalar extensiones PHP ligeras primero (paralelización limitada)
-RUN docker-php-ext-install -j2 \
-    pdo \
-    pdo_mysql \
-    pdo_pgsql \
-    bcmath \
-    mbstring \
-    xml \
-    curl
+# ESTRATEGIA: Instalar extensiones UNA POR UNA para evitar problemas de memoria
+# Extensiones básicas (rápidas)
+RUN docker-php-ext-install pdo
+RUN docker-php-ext-install pdo_mysql
+RUN docker-php-ext-install pdo_pgsql
+RUN docker-php-ext-install bcmath
+RUN docker-php-ext-install mbstring
+RUN docker-php-ext-install xml
+RUN docker-php-ext-install curl
 
-# Instalar extensiones que requieren más recursos (sin paralelización)
-RUN docker-php-ext-install \
-    zip \
-    intl \
-    gd \
-    xsl \
-    soap \
-    fileinfo
+# Extensiones que requieren más memoria (una por una)
+RUN docker-php-ext-install zip
+RUN docker-php-ext-install intl
+RUN docker-php-ext-install gd
+RUN docker-php-ext-install xsl
+RUN docker-php-ext-install soap
+
+# fileinfo es la más pesada - instalar al final cuando haya más memoria liberada
+RUN docker-php-ext-install fileinfo
 
 # Instalar Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer

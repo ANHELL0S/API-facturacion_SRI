@@ -158,22 +158,52 @@ docker_clean() {
     fi
 }
 
+setup_swap() {
+    echo "Configurando SWAP de 2GB..."
+    
+    # Verificar si ya existe swap
+    if swapon --show | grep -q /swapfile; then
+        print_warning "Ya existe un archivo swap configurado"
+        sudo swapon --show
+        return
+    fi
+    
+    # Crear archivo swap
+    sudo fallocate -l 2G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048
+    sudo chmod 600 /swapfile
+    sudo mkswap /swapfile
+    sudo swapon /swapfile
+    
+    # Hacer permanente
+    if ! grep -q '/swapfile' /etc/fstab; then
+        echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+    fi
+    
+    # Configurar swappiness
+    sudo sysctl vm.swappiness=10
+    echo 'vm.swappiness=10' | sudo tee -a /etc/sysctl.conf
+    
+    print_success "SWAP configurado correctamente"
+    free -h
+}
+
 # Bucle principal
 while true; do
     show_menu
-    read -p "Elige una opción [1-9]: " option
+    read -p "Elige una opción [1-10]: " option
     clear
     
     case $option in
         1) install_docker; pause ;;
         2) verify_docker; pause ;;
-        3) docker_build; pause ;;
-        4) docker_build_no_cache; pause ;;
-        5) docker_up; pause ;;
-        6) docker_logs; pause ;;
-        7) docker_down; pause ;;
-        8) docker_clean; pause ;;
-        9) echo "Saliendo..."; exit 0 ;;
+        3) setup_swap; pause ;;
+        4) docker_build; pause ;;
+        5) docker_build_no_cache; pause ;;
+        6) docker_up; pause ;;
+        7) docker_logs; pause ;;
+        8) docker_down; pause ;;
+        9) docker_clean; pause ;;
+        10) echo "Saliendo..."; exit 0 ;;
         *) print_error "Opción no válida"; pause ;;
     esac
 done
