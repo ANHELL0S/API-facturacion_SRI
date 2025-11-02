@@ -105,7 +105,7 @@ class SincronoComprobanteService
             throw new SriException('0', $e->getMessage());
         } finally {
             if ($signedFilePath && file_exists($signedFilePath)) {
-                @unlink($signedFilePath);
+                // @unlink($signedFilePath);
             }
         }
     }
@@ -178,7 +178,7 @@ class SincronoComprobanteService
             throw new \Exception('Error al firmar el XML: ' . $e->getMessage());
         } finally {
             if (file_exists($xmlFilePath)) {
-                @unlink($xmlFilePath);
+                //@unlink($xmlFilePath);
             }
         }
     }
