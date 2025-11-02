@@ -5,8 +5,8 @@ services:
         build:
             context: .
             dockerfile: Dockerfile
-            # Limitar memoria durante el build
             shm_size: "256mb"
+        image: facturacion-laravel-php:latest
         container_name: laravel-php
         restart: unless-stopped
         working_dir: /var/www
@@ -19,7 +19,6 @@ services:
         depends_on:
             laravel-db:
                 condition: service_healthy
-        # Limitar recursos en runtime
         deploy:
             resources:
                 limits:
@@ -44,7 +43,6 @@ services:
         ports:
             - "3307:3306"
         command: --default-authentication-plugin=mysql_native_password
-        # Limitar recursos de MySQL para servidor pequeño
         deploy:
             resources:
                 limits:
@@ -52,7 +50,6 @@ services:
                     memory: 256M
                 reservations:
                     memory: 128M
-        # Health check para depends_on
         healthcheck:
             test:
                 [
@@ -71,8 +68,8 @@ services:
             start_period: 30s
 
     laravel-queue:
-        # IMPORTANTE: Usa la imagen ya construida en lugar de reconstruir
-        image: ${COMPOSE_PROJECT_NAME:-laravel}_laravel-php
+        # Reutiliza la imagen construida por laravel-php
+        image: facturacion-laravel-php:latest
         container_name: laravel-queue
         restart: unless-stopped
         working_dir: /var/www
@@ -104,7 +101,6 @@ services:
             - "5173:5173"
         networks:
             - laravel-net
-        # Optimizar instalación de npm
         command: sh -c "npm ci --prefer-offline --no-audit || npm install && npm install react react-dom @vitejs/plugin-react && npm run build && sleep infinity"
         deploy:
             resources:
