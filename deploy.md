@@ -72,18 +72,20 @@ sudo nano /etc/nginx/sites-available/domain
 # Configuración HTTP - Redirección a HTTPS
 server {
     listen 80;
-    server_name domain;
+    server_name facturacion.pui-pos.cloud;
+
+    # Redireccionar todo el tráfico HTTP a HTTPS
     return 301 https://$server_name$request_uri;
 }
 
 # Configuración HTTPS principal
 server {
     listen 443 ssl http2;
-    server_name domain;
+    server_name facturacion.pui-pos.cloud;  # ← CORREGIDO: Sin https://
 
     # Configuración SSL con Certbot (Let's Encrypt)
-    ssl_certificate /etc/letsencrypt/live/domain/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/domain/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/facturacion.pui-pos.cloud/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/facturacion.pui-pos.cloud/privkey.pem;
     include /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
 
@@ -91,7 +93,7 @@ server {
     root /var/www/facturacion/public;
     index index.php index.html index.htm;
 
-    # Logs específicos
+    # Logs específicos para este dominio
     access_log /var/log/nginx/facturacion_access.log;
     error_log /var/log/nginx/facturacion_error.log;
 
@@ -105,21 +107,24 @@ server {
         try_files $uri =404;
         fastcgi_split_path_info ^(.+\.php)(/.+)$;
 
-        # Conexión al contenedor laravel-php en puerto 9000
+        # Conexión al contenedor laravel-php en puerto 9000 del host
         fastcgi_pass 127.0.0.1:9000;
         fastcgi_index index.php;
 
-        # Rutas dentro del contenedor
-        fastcgi_param SCRIPT_FILENAME /var/www/public$fastcgi_script_name;
-        fastcgi_param DOCUMENT_ROOT /var/www/public;
+        # Incluir parámetros base primero
         include fastcgi_params;
 
-        # Configuraciones específicas
+        # IMPORTANTE: Rutas dentro del contenedor Docker (volumes: .:/var/www)
+        fastcgi_param SCRIPT_FILENAME /var/www/public$fastcgi_script_name;
+        fastcgi_param DOCUMENT_ROOT /var/www/public;
+
+        # Configuraciones específicas para Laravel
         fastcgi_param HTTP_PROXY "";
         fastcgi_param HTTPS on;
         fastcgi_param SERVER_PORT 443;
+        fastcgi_param SERVER_NAME $server_name;
 
-        # Performance
+        # Configuraciones de performance
         fastcgi_read_timeout 300;
         fastcgi_buffer_size 128k;
         fastcgi_buffers 256 16k;
@@ -129,13 +134,38 @@ server {
         fastcgi_send_timeout 60s;
     }
 
-    # Archivos estáticos con cache
+    # Proxy para Vite (desarrollo) - conexión al contenedor laravel-vite en localhost
+    location /vite/ {
+        proxy_pass http://127.0.0.1:5173;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Port 443;
+        proxy_cache_bypass $http_upgrade;
+        proxy_redirect off;
+    }
+
+    # Servir archivos estáticos con cache optimizado
     location ~* \.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot|otf)$ {
         expires 1y;
         add_header Cache-Control "public, no-transform, immutable";
         add_header Vary Accept-Encoding;
         try_files $uri =404;
+
+        # Comprimir archivos estáticos
         gzip_static on;
+    }
+
+    # Manejar archivos de Laravel Mix/Vite
+    location /build/ {
+        alias /var/www/facturacion/public/build/;
+        expires 1y;
+        add_header Cache-Control "public, no-transform, immutable";
+        try_files $uri =404;
     }
 
     # Storage público de Laravel
@@ -153,11 +183,19 @@ server {
         log_not_found off;
     }
 
+    # Denegar acceso a archivos .htaccess
+    location ~ /\.ht {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
     # Headers de seguridad
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-XSS-Protection "1; mode=block" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;" always;
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
     # Configuraciones adicionales
