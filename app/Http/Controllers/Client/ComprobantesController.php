@@ -488,6 +488,11 @@ class ComprobantesController extends Controller
 
     public function generateFactura(FacturaRequest $request, PuntoEmision $puntoEmision, SincronoComprobanteService $sincronoService)
     {
+        // ✅ LIMPIAR CUALQUIER OUTPUT BUFFERING PREVIO
+        while (ob_get_level()) {
+            ob_end_clean();
+        }
+
         try {
             // 1. Autorizar acceso a punto de emision de usuario
             Gate::authorize('view', $puntoEmision);
@@ -510,20 +515,35 @@ class ComprobantesController extends Controller
                 TipoComprobanteEnum::FACTURA
             );
 
+            // ✅ LIMPIAR OUTPUT BUFFER ANTES DE ENVIAR RESPUESTA
+            while (ob_get_level()) {
+                ob_end_clean();
+            }
+
             return $this->sendResponse(
                 'Factura generada y autorizada exitosamente.',
                 $comprobante,
                 201
             );
         } catch (AuthorizationException $e) {
+            // ✅ Limpiar buffer en errores también
+            while (ob_get_level()) {
+                ob_end_clean();
+            }
             return $this->sendError('Acceso denegado', $e->getMessage(), $e->status());
         } catch (SriException $e) {
+            while (ob_get_level()) {
+                ob_end_clean();
+            }
             return $this->sendError(
                 'Error del SRI',
                 ['sri_error' => $e->getMessage()],
                 422 // Unprocessable Entity
             );
         } catch (\Exception $e) {
+            while (ob_get_level()) {
+                ob_end_clean();
+            }
             return $this->sendError('Error al generar la factura', $e->getMessage(), 500);
         }
     }
