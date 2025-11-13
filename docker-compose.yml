@@ -5,7 +5,7 @@ services:
         build:
             context: .
             dockerfile: Dockerfile
-            shm_size: "256mb"
+        shm_size: "256mb"
         image: facturacion-laravel-php:latest
         container_name: laravel-php
         restart: unless-stopped
@@ -19,13 +19,27 @@ services:
         depends_on:
             laravel-db:
                 condition: service_healthy
+        # ✅ HEALTHCHECK AGREGADO - Verifica que PHP-FPM esté listo
+        healthcheck:
+            test: ["CMD-SHELL", "php-fpm-healthcheck || exit 1"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 40s
+        environment:
+            # ✅ Variables para mejorar estabilidad de PHP-FPM
+            PHP_FPM_PM: dynamic
+            PHP_FPM_PM_MAX_CHILDREN: 10
+            PHP_FPM_PM_START_SERVERS: 2
+            PHP_FPM_PM_MIN_SPARE_SERVERS: 1
+            PHP_FPM_PM_MAX_SPARE_SERVERS: 3
         deploy:
             resources:
                 limits:
                     cpus: "1.0"
-                    memory: 384M
+                    memory: 512M # ✅ Aumentado de 384M
                 reservations:
-                    memory: 128M
+                    memory: 256M # ✅ Aumentado de 128M
 
     laravel-db:
         image: mysql:8.0.34
@@ -42,7 +56,7 @@ services:
             - laravel-net
         ports:
             - "3307:3306"
-        command: --default-authentication-plugin=mysql_native_password
+        command: --default-authentication-plugin=mysql_native_password --max_connections=100
         deploy:
             resources:
                 limits:
@@ -68,7 +82,6 @@ services:
             start_period: 30s
 
     laravel-queue:
-        # Reutiliza la imagen construida por laravel-php
         image: facturacion-laravel-php:latest
         container_name: laravel-queue
         restart: unless-stopped
@@ -76,8 +89,10 @@ services:
         volumes:
             - .:/var/www
         depends_on:
-            - laravel-db
-            - laravel-php
+            laravel-php:
+                condition: service_healthy # ✅ Espera a que PHP-FPM esté listo
+            laravel-db:
+                condition: service_healthy
         networks:
             - laravel-net
         command: sh -c "sleep 30 && php artisan storage:link && php artisan queue:work --sleep=3 --tries=3"

@@ -28,13 +28,15 @@ RUN apt-get update && apt-get install -y \
     # Node.js y npm
     nodejs \
     npm \
+    # ✅ AGREGADO: libfcgi para healthcheck
+    libfcgi-bin \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 # HABILITAR ALGORITMOS LEGACY EN OPENSSL
 RUN sed -i 's/^openssl_conf = openssl_init$/openssl_conf = openssl_init\n\n[openssl_init]\nproviders = provider_sect\n\n[provider_sect]\ndefault = default_sect\nlegacy = legacy_sect\n\n[default_sect]\nactivate = 1\n\n[legacy_sect]\nactivate = 1/' /etc/ssl/openssl.cnf || \
     echo -e "\nopenssl_conf = openssl_init\n\n[openssl_init]\nproviders = provider_sect\n\n[provider_sect]\ndefault = default_sect\nlegacy = legacy_sect\n\n[default_sect]\nactivate = 1\n\n[legacy_sect]\nactivate = 1" >> /etc/ssl/openssl.cnf
-    
+
 # Verificar instalación de Java
 RUN java -version
 
@@ -64,23 +66,34 @@ RUN docker-php-ext-install fileinfo
 # Instalar Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
+# ✅ AGREGADO: Instalar php-fpm-healthcheck
+RUN curl -o /usr/local/bin/php-fpm-healthcheck \
+    https://raw.githubusercontent.com/renatomefi/php-fpm-healthcheck/master/php-fpm-healthcheck \
+    && chmod +x /usr/local/bin/php-fpm-healthcheck
+
 # Establecer directorio de trabajo
 WORKDIR /var/www
 
-# Configurar PHP-FPM
+# ✅ CONFIGURACIÓN OPTIMIZADA DE PHP-FPM (Ajustada para tu servidor)
 RUN sed -i 's/listen = 127.0.0.1:9000/listen = 0.0.0.0:9000/' /usr/local/etc/php-fpm.d/www.conf && \
-    sed -i 's/^pm.max_children = .*/pm.max_children = 50/' /usr/local/etc/php-fpm.d/www.conf && \
-    sed -i 's/^pm.start_servers = .*/pm.start_servers = 5/' /usr/local/etc/php-fpm.d/www.conf && \
-    sed -i 's/^pm.min_spare_servers = .*/pm.min_spare_servers = 5/' /usr/local/etc/php-fpm.d/www.conf && \
-    sed -i 's/^pm.max_spare_servers = .*/pm.max_spare_servers = 35/' /usr/local/etc/php-fpm.d/www.conf && \
-    echo "request_terminate_timeout = 300" >> /usr/local/etc/php-fpm.d/www.conf
+    sed -i 's/^pm = .*/pm = dynamic/' /usr/local/etc/php-fpm.d/www.conf && \
+    sed -i 's/^pm.max_children = .*/pm.max_children = 20/' /usr/local/etc/php-fpm.d/www.conf && \
+    sed -i 's/^pm.start_servers = .*/pm.start_servers = 4/' /usr/local/etc/php-fpm.d/www.conf && \
+    sed -i 's/^pm.min_spare_servers = .*/pm.min_spare_servers = 2/' /usr/local/etc/php-fpm.d/www.conf && \
+    sed -i 's/^pm.max_spare_servers = .*/pm.max_spare_servers = 6/' /usr/local/etc/php-fpm.d/www.conf && \
+    echo "pm.max_requests = 500" >> /usr/local/etc/php-fpm.d/www.conf && \
+    echo "request_terminate_timeout = 180" >> /usr/local/etc/php-fpm.d/www.conf && \
+    echo "pm.status_path = /status" >> /usr/local/etc/php-fpm.d/www.conf && \
+    echo "ping.path = /ping" >> /usr/local/etc/php-fpm.d/www.conf && \
+    echo "ping.response = pong" >> /usr/local/etc/php-fpm.d/www.conf
 
 # Crear configuración PHP personalizada
 RUN echo "upload_max_filesize = 100M" > /usr/local/etc/php/conf.d/laravel.ini && \
     echo "post_max_size = 100M" >> /usr/local/etc/php/conf.d/laravel.ini && \
     echo "memory_limit = 256M" >> /usr/local/etc/php/conf.d/laravel.ini && \
-    echo "max_execution_time = 300" >> /usr/local/etc/php/conf.d/laravel.ini && \
-    echo "max_input_time = 300" >> /usr/local/etc/php/conf.d/laravel.ini
+    echo "max_execution_time = 180" >> /usr/local/etc/php/conf.d/laravel.ini && \
+    echo "max_input_time = 180" >> /usr/local/etc/php/conf.d/laravel.ini && \
+    echo "default_socket_timeout = 180" >> /usr/local/etc/php/conf.d/laravel.ini
 
 # Exponer puerto PHP-FPM
 EXPOSE 9000

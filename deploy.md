@@ -81,7 +81,7 @@ server {
 # Configuración HTTPS principal
 server {
     listen 443 ssl http2;
-    server_name facturacion.pui-pos.cloud;  # ← CORREGIDO: Sin https://
+    server_name facturacion.pui-pos.cloud;
 
     # Configuración SSL con Certbot (Let's Encrypt)
     ssl_certificate /etc/letsencrypt/live/facturacion.pui-pos.cloud/fullchain.pem;
@@ -102,7 +102,7 @@ server {
         try_files $uri $uri/ /index.php?$query_string;
     }
 
-    # Procesar archivos PHP a través del contenedor Docker
+    # ✅ PROCESAR ARCHIVOS PHP - CONFIGURACIÓN MEJORADA
     location ~ \.php$ {
         try_files $uri =404;
         fastcgi_split_path_info ^(.+\.php)(/.+)$;
@@ -110,6 +110,10 @@ server {
         # Conexión al contenedor laravel-php en puerto 9000 del host
         fastcgi_pass 127.0.0.1:9000;
         fastcgi_index index.php;
+
+        # ✅ CRÍTICO: Keep-alive y manejo de conexiones
+        fastcgi_keep_conn on;
+        fastcgi_socket_keepalive on;
 
         # Incluir parámetros base primero
         include fastcgi_params;
@@ -124,14 +128,24 @@ server {
         fastcgi_param SERVER_PORT 443;
         fastcgi_param SERVER_NAME $server_name;
 
-        # Configuraciones de performance
-        fastcgi_read_timeout 300;
+        # ✅ Configuraciones de timeouts optimizadas
+        fastcgi_connect_timeout 60s;
+        fastcgi_send_timeout 180s;
+        fastcgi_read_timeout 180s;
+
+        # ✅ Configuraciones de buffers optimizadas
         fastcgi_buffer_size 128k;
         fastcgi_buffers 256 16k;
         fastcgi_busy_buffers_size 256k;
         fastcgi_temp_file_write_size 256k;
-        fastcgi_connect_timeout 60s;
-        fastcgi_send_timeout 60s;
+
+        # ✅ Reintentos automáticos en caso de error
+        fastcgi_next_upstream error timeout invalid_header http_500 http_503;
+        fastcgi_next_upstream_tries 2;
+        fastcgi_next_upstream_timeout 10s;
+
+        # ✅ Interceptar errores de PHP-FPM
+        fastcgi_intercept_errors off;
     }
 
     # Proxy para Vite (desarrollo) - conexión al contenedor laravel-vite en localhost
@@ -200,9 +214,10 @@ server {
 
     # Configuraciones adicionales
     client_max_body_size 100M;
-    client_body_timeout 60s;
-    client_header_timeout 60s;
+    client_body_timeout 180s;
+    client_header_timeout 180s;
     keepalive_timeout 65s;
+    send_timeout 180s;
 
     # Compresión GZIP
     gzip on;
