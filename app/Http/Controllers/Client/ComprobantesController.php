@@ -488,11 +488,6 @@ class ComprobantesController extends Controller
 
     public function generateFactura(FacturaRequest $request, PuntoEmision $puntoEmision, SincronoComprobanteService $sincronoService)
     {
-        // ✅ LIMPIAR CUALQUIER OUTPUT BUFFERING PREVIO
-        while (ob_get_level()) {
-            ob_end_clean();
-        }
-
         try {
             // 1. Autorizar acceso a punto de emision de usuario
             Gate::authorize('view', $puntoEmision);
